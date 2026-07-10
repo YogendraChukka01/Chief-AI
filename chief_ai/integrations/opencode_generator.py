@@ -13,6 +13,7 @@ from typing import Optional
 
 import yaml
 
+from ..config import default_model
 from ..core.registry import DEPARTMENTS, list_sub_agents
 from ..core.types import Permission, SubAgent
 
@@ -31,8 +32,9 @@ def render_subagent(sub: SubAgent) -> str:
         "description": sub.description,
         "permissions": perms,
     }
-    if sub.model:
-        block["model"] = sub.model
+    model = sub.model or default_model()
+    if model:
+        block["model"] = model
     return _frontmatter(block) + "\n" + sub.prompt + "\n"
 
 
