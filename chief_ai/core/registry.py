@@ -78,6 +78,7 @@ class _Spec:
         tags: list[str],
         tools: Optional[list[str]] = None,
         perms: Optional[dict[Permission, bool]] = None,
+        model: Optional[str] = None,
     ) -> None:
         self.sid = sid
         self.name = name
@@ -85,6 +86,7 @@ class _Spec:
         self.tags = tags
         self.tools = tools
         self.perms = perms
+        self.model = model
 
 
 # ---------------------------------------------------------------------------
@@ -321,6 +323,7 @@ def _build_registry() -> list[Department]:
                     tags=spec.tags,
                     tools=tools,
                     permissions=perms,
+                    model=spec.model,
                     prompt=_prompt(spec.name, dept_name, spec.description, spec.tags),
                 )
             )

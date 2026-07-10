@@ -91,19 +91,41 @@ def decompose(goal: str) -> list[Task]:
             )
         ]
 
-    # Preserve department / sub-agent ordering from the registry.
-    tasks: list[Task] = []
+    # Preserve department / sub-agent ordering from the registry, then wire
+    # dependencies so downstream work waits for its upstream inputs.
+    by_sub: dict[str, Task] = {}
     idx = 1
     for dept in DEPARTMENTS:
         for sub in dept.sub_agents:
             if sub.id in chosen:
-                tasks.append(
-                    Task(
-                        id=f"t{idx}",
-                        description=goal,
-                        department=dept.id,
-                        sub_agent=sub.id,
-                    )
+                by_sub[sub.id] = Task(
+                    id=f"t{idx}",
+                    description=goal,
+                    department=dept.id,
+                    sub_agent=sub.id,
                 )
                 idx += 1
-    return tasks
+
+    _apply_dependencies(by_sub)
+    return [by_sub[s.id] for s in _ordered() if s.id in by_sub]
+
+
+# Downstream agent -> agents it must wait for (only applied when present).
+_DEPENDENCIES: dict[str, list[str]] = {
+    "qa-testing": ["eng-frontend", "eng-backend"],
+    "doc-readme": ["eng-frontend"],
+    "devops-cloud": ["eng-backend", "eng-frontend"],
+    "marketing-launch": ["doc-readme", "devops-cloud"],
+}
+
+
+def _ordered() -> list:
+    """Registry-ordered sub-agents (department then agent order)."""
+    return [sub for dept in DEPARTMENTS for sub in dept.sub_agents]
+
+
+def _apply_dependencies(by_sub: dict[str, Task]) -> None:
+    for sub_id, upstream in _DEPENDENCIES.items():
+        if sub_id in by_sub:
+            deps = [u for u in upstream if u in by_sub]
+            by_sub[sub_id].dependencies = deps

@@ -99,11 +99,15 @@ class MemoryAI:
 
     # -- context retrieval -------------------------------------------------
     def retrieve(self, query: str, limit: int = 5) -> list[str]:
-        """Return facts whose key or value contains the query terms."""
-        q = query.lower()
-        hits = [
-            f"{k}: {v}"
-            for k, v in self._state.facts.items()
-            if q in k.lower() or q in v.lower()
-        ]
+        """Return facts whose key or value shares a meaningful term with ``query``."""
+        import re
+
+        tokens = {t for t in re.findall(r"[a-z0-9]{3,}", query.lower())}
+        if not tokens:
+            return []
+        hits = []
+        for k, v in self._state.facts.items():
+            hay = f"{k} {v}".lower()
+            if any(tok in hay for tok in tokens):
+                hits.append(f"{k}: {v}")
         return hits[:limit]
