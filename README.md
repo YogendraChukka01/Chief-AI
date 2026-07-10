@@ -81,16 +81,34 @@ chief run "Build the next version of my portfolio"
 # 3. Execute with REAL opencode sub-agents
 chief run "Build the next version of my portfolio" --opencode
 
-# 4. (Re)generate the .opencode/ agent files from the registry
+# 4. Run teams of independent agents concurrently
+chief run "Build the next version of my portfolio" --parallel
+
+# 5. Launch the live-plan web UI (zero dependencies)
+chief serve --port 8000
+# open http://127.0.0.1:8000
+
+# 6. (Re)generate the .opencode/ agent files from the registry
 chief generate
 
-# 5. Inspect the org chart
+# 7. Inspect the org chart
 chief list
 ```
 
 After `chief generate`, open the project in opencode and switch to the **chief**
 primary agent (Tab, or `@chief`). It will delegate work to the `@<agent>`
 specialists automatically.
+
+### Web UI
+
+`chief serve` starts a small web server (standard library only — no extra
+dependencies) that:
+
+- renders the goal's **dependency DAG** with [mermaid](https://mermaid.js.org),
+- **streams execution live** over Server-Sent Events as the Chief dispatches each
+  sub-agent, updating task cards from *pending → running → done*.
+
+Open `http://127.0.0.1:8000`, type a goal, and click **Show Plan** then **Run Live**.
 
 ### Programmatic usage
 
@@ -192,10 +210,10 @@ and generator validity (frontmatter parses, chief is primary with task access).
 
 ## Roadmap
 
-- [ ] Plug `MemoryAI` retrieval into the Chief's prompt context.
-- [ ] Per-agent `model` overrides in the registry.
-- [ ] Parallel dispatch with dependency-aware scheduling.
-- [ ] Web/streaming UI for live plan visualization.
+- [x] Plug `MemoryAI` retrieval into the Chief's prompt context.
+- [x] Per-agent `model` overrides in the registry (and `CHIEF_MODEL` default).
+- [x] Parallel dispatch with dependency-aware scheduling.
+- [x] Web/streaming UI for live plan visualization.
 
 ---
 

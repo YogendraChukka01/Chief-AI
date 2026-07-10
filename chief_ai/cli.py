@@ -18,6 +18,7 @@ from .core.chief import ChiefAI, MockExecutor
 from .core.registry import DEPARTMENTS, list_sub_agents
 from .integrations.opencode_generator import generate
 from .integrations.opencode_runner import OpencodeRunner
+from .web import make_server
 
 
 def _cmd_plan(args: argparse.Namespace) -> int:
@@ -54,6 +55,19 @@ def _cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_serve(args: argparse.Namespace) -> int:
+    server = make_server(host=args.host, port=args.port, use_opencode=args.opencode)
+    url = f"http://{args.host}:{args.port}/"
+    print(f"Chief AI web UI running at {url}  (Ctrl+C to stop)")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.shutdown()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="chief", description="Chief AI orchestrator CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -75,6 +89,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_list = sub.add_parser("list", help="List departments and sub-agents")
     p_list.set_defaults(func=_cmd_list)
+
+    p_serve = sub.add_parser("serve", help="Launch the live-plan web UI")
+    p_serve.add_argument("--host", default="127.0.0.1")
+    p_serve.add_argument("--port", type=int, default=8000)
+    p_serve.add_argument("--opencode", action="store_true", help="Use real opencode sub-agents")
+    p_serve.set_defaults(func=_cmd_serve)
 
     return parser
 

@@ -17,7 +17,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Optional
+from typing import Iterator, Optional
 
 from .memory import MemoryAI
 from .registry import get_department, get_sub_agent
@@ -147,8 +147,77 @@ class ChiefAI:
             sections.append("")
         return "\n".join(sections)
 
+    # -- streaming --------------------------------------------------------
+    def stream(self, goal: str, parallel: bool = False) -> Iterator[dict]:
+        """Yield execution events for live UIs.
+
+        Event shapes:
+          {"type": "plan", "plan": {...}}
+          {"type": "task_start", "task_id", "sub_agent"}
+          {"type": "task_done", "task_id", "sub_agent", "content"}
+          {"type": "done", "result": "<synthesis>"}
+        """
+        plan = self.plan(goal)
+        yield {"type": "plan", "plan": _plan_to_dict(plan)}
+
+        results: dict[str, Result] = {}
+        if parallel:
+            yield from self._stream_schedule(plan, results)
+        else:
+            for task in plan.tasks:
+                yield {"type": "task_start", "task_id": task.id, "sub_agent": task.sub_agent}
+                res = self.dispatch(task)
+                results[task.id] = res
+                yield {
+                    "type": "task_done",
+                    "task_id": task.id,
+                    "sub_agent": task.sub_agent,
+                    "content": res.content,
+                }
+
+        yield {"type": "done", "result": self.synthesize(plan, list(results.values()))}
+
+    def _stream_schedule(self, plan: Plan, results: dict[str, Result]) -> Iterator[dict]:
+        pending = {t.id: t for t in plan.tasks}
+        done: set[str] = set()
+        while pending:
+            ready = [t for t in pending.values() if all(d in done for d in t.dependencies)]
+            if not ready:
+                ready = list(pending.values())
+            for t in ready:
+                yield {"type": "task_start", "task_id": t.id, "sub_agent": t.sub_agent}
+            with ThreadPoolExecutor(max_workers=min(len(ready), 8)) as ex:
+                futures = {ex.submit(self.dispatch, t): t.id for t in ready}
+                for fut in futures:
+                    res = fut.result()
+                    results[res.task_id] = res
+                    done.add(res.task_id)
+                    pending.pop(res.task_id, None)
+                    yield {
+                        "type": "task_done",
+                        "task_id": res.task_id,
+                        "sub_agent": res.sub_agent,
+                        "content": res.content,
+                    }
+
     # -- full pipeline -----------------------------------------------------
     def execute(self, goal: str, parallel: bool = False) -> str:
         plan = self.plan(goal)
         results = self._schedule(plan) if parallel else [self.dispatch(t) for t in plan.tasks]
         return self.synthesize(plan, results)
+
+
+def _plan_to_dict(plan: Plan) -> dict:
+    return {
+        "goal": plan.goal,
+        "tasks": [
+            {
+                "id": t.id,
+                "department": t.department,
+                "sub_agent": t.sub_agent,
+                "name": get_sub_agent(t.sub_agent).name if t.sub_agent else "?",
+                "dependencies": list(t.dependencies),
+            }
+            for t in plan.tasks
+        ],
+    }
