@@ -1,74 +1,221 @@
 # Chief-AI
 
-A **single Chief AI** that manages a team of **specialized sub-agents**. You interact
-only with the Chief; it understands your goal, decomposes it into tasks, delegates
-each to the right specialist, and synthesizes one coherent response.
+> A single **Chief AI** that orchestrates a team of **specialized sub-agents** — built as a Python framework that compiles into native [opencode](https://opencode.ai) agents.
 
-The system is implemented as a **Python framework** (`chief_ai`) that owns the
-architecture, orchestration, and memory. It **generates opencode-native agents** so
-each specialist runs as a real **opencode sub-agent** — no external LLM keys required
-in Python.
+Chief-AI is a multi-agent operating system for software projects. You interact with exactly one agent — the **Chief** — which understands your goal, decomposes it into tasks, delegates each task to the most qualified specialist, and returns a single, coherent result. Every specialist runs as a real **opencode sub-agent**, so there are no external LLM keys to manage from Python.
 
 ```
-Chief AI (chief.md, primary agent)
-│
-├── Executive AI      (Strategy, Product, Startup Advisor, Decision Engine)
-├── Engineering AI    (Frontend, Backend, Mobile, Desktop, AI/ML, Data, API, System)
-├── Design AI         (UI, UX, Graphic, Brand, Motion)
-├── DevOps AI         (Linux, Docker, Kubernetes, Cloud, Networking, Security)
-├── QA AI             (Testing, Bug Hunting, Performance, Security Audit)
-├── Documentation AI  (PRDs, READMEs, API Docs, Technical Writing)
-├── Research AI       (AI, Market, Competitor, Patent, Academic)
-├── Marketing AI      (SEO, LinkedIn, GitHub, Portfolio, Social, Launch)
-├── Finance AI        (Budgeting, Pricing, Revenue, Startup Finance)
-├── Legal AI          (Licenses, Privacy, Terms, Compliance)
-└── Memory AI         (Long-term, Knowledge Graph, History, Context, Learning)
+        ┌─────────────────────────────────────────┐
+        │              Chief AI (primary)           │
+        │     understands · decomposes · delegates  │
+        └───────────────┬───────────────────────────┘
+                        │  @mention / Task tool
+        ┌───────────────┼───────────────────────────┐
+        ▼               ▼                           ▼
+  Executive AI     Engineering AI              Design AI
+  ├ Strategy       ├ Frontend Expert           ├ UI Designer
+  ├ Product        ├ Backend Expert            ├ UX Researcher
+  ├ Startup        ├ Mobile Expert             ├ Graphic Designer
+  └ Decision       ├ Desktop Expert            ├ Brand Designer
+                   ├ AI/ML Engineer            └ Motion Designer
+                   ├ Data Engineer
+                   ├ API Architect             DevOps AI    QA AI
+                   └ System Architect          ├ Linux      ├ Testing
+                                               ├ Docker     ├ Bug Hunting
+                                               ├ Kubernetes ├ Performance
+                                               ├ Cloud      └ Security Audit
+                                               ├ Networking
+                                               └ Security
+
+  Documentation AI · Research AI · Marketing AI · Finance AI · Legal AI · Memory AI
 ```
 
-## Architecture
+---
 
-- `chief_ai/core/registry.py` — **single source of truth**: all 11 departments and 55 sub-agents.
-- `chief_ai/core/router.py` — `decompose(goal)` → routed tasks; `route(text)` → best agent.
-- `chief_ai/core/chief.py` — `ChiefAI` orchestrator: plan → dispatch → synthesize.
-- `chief_ai/core/memory.py` — `MemoryAI`: long-term store, knowledge graph, history, retrieval.
-- `chief_ai/integrations/opencode_generator.py` — emits `.opencode/agents/*.md` + `opencode.json`.
-- `chief_ai/integrations/opencode_runner.py` — runs sub-agents via the `opencode` CLI.
+## Why Chief-AI?
 
-## Install
+| Problem | Chief-AI's answer |
+| --- | --- |
+| One model can't be an expert at everything | A department per domain, a specialist per concern |
+| Context gets lost between tools | A single orchestrator retains the goal end-to-end |
+| Agents need a host runtime | Compiles to **opencode sub-agents** — no bespoke infra |
+| Config drift between code and agents | The Python registry is the **single source of truth** |
+
+---
+
+## Feature overview
+
+- **11 departments, 55 sub-agents** covering the full product lifecycle.
+- **Deterministic routing** — `decompose()` turns a goal into an ordered, department-sorted task list.
+- **Two execution backends** — `MockExecutor` for instant previews, `OpencodeRunner` for live sub-agent execution.
+- **Persistent memory** — long-term facts, a knowledge graph, project history, and keyword context retrieval.
+- **Reproducible artifacts** — `chief generate` emits every `.opencode/agents/*.md` and `opencode.json` from the registry.
+- **Tested** — registry, router, and generator covered by `pytest`.
+
+---
+
+## Installation
+
+Requires Python 3.10+.
 
 ```bash
+git clone https://github.com/YogendraChukka01/Chief-AI.git
+cd Chief-AI
 pip install -e ".[dev]"
 ```
 
-## Usage
+To execute sub-agents for real, install [opencode](https://opencode.ai/docs/install)
+and ensure the `opencode` binary is on your `PATH`.
+
+---
+
+## Quick start
 
 ```bash
-# Preview how the Chief would decompose a goal (no execution)
+# 1. Preview how the Chief decomposes a goal (no LLM calls)
 chief plan "Build the next version of my portfolio"
 
-# Execute a goal using the mock executor (no LLM calls)
+# 2. Execute with the mock executor (instant, deterministic)
 chief run "Build the next version of my portfolio"
 
-# Execute using REAL opencode sub-agents (requires `opencode` on PATH)
+# 3. Execute with REAL opencode sub-agents
 chief run "Build the next version of my portfolio" --opencode
 
-# Generate the opencode agent files into .opencode/
+# 4. (Re)generate the .opencode/ agent files from the registry
 chief generate
 
-# List every department and sub-agent
+# 5. Inspect the org chart
 chief list
 ```
 
 After `chief generate`, open the project in opencode and switch to the **chief**
-primary agent (Tab / `@chief`). It will delegate work to the `@<agent>` specialists.
+primary agent (Tab, or `@chief`). It will delegate work to the `@<agent>`
+specialists automatically.
 
-## Extending
+### Programmatic usage
 
-Add or edit agents in `chief_ai/core/registry.py`, then re-run `chief generate` to
-rebuild the `.opencode/` artifacts. The Python registry stays the single source of truth.
+```python
+from chief_ai import ChiefAI, MockExecutor
 
-## Tests
+chief = ChiefAI(executor=MockExecutor())
+plan = chief.plan("Ship a v2 of the marketing site")
+print(plan.render())
+
+result = chief.execute("Ship a v2 of the marketing site")
+print(result)
+```
+
+---
+
+## Architecture
+
+```
+Chief-AI/
+├── chief_ai/
+│   ├── core/
+│   │   ├── types.py        # Department, SubAgent, Task, Result, Permission
+│   │   ├── registry.py     # SINGLE SOURCE OF TRUTH: 11 depts + 55 agents
+│   │   ├── router.py       # decompose(goal) -> tasks ; route(text) -> agent
+│   │   ├── chief.py        # ChiefAI orchestrator: plan → dispatch → synthesize
+│   │   └── memory.py       # MemoryAI: facts, graph, history, retrieval
+│   ├── integrations/
+│   │   ├── opencode_generator.py  # registry -> .opencode/agents/*.md + opencode.json
+│   │   └── opencode_runner.py     # Executor that shells out to `opencode run`
+│   └── cli.py              # `chief plan | run | generate | list`
+├── .opencode/
+│   ├── agents/             # chief.md (primary) + one .md per specialist (generated)
+│   └── opencode.json       # wires the chief primary agent
+└── tests/
+```
+
+### Execution model
+
+1. **Python owns the logic.** The `ChiefAI` orchestrator plans, routes, dispatches,
+   and synthesizes using only the local registry — no network calls.
+2. **opencode owns the execution.** Each specialist is a generated sub-agent with
+   scoped permissions. The `chief` primary agent invokes them via the Task tool /
+   `@mention`, so the actual LLM work happens inside opencode.
+3. **One source of truth.** Edit agents in `chief_ai/core/registry.py`, then run
+   `chief generate` to rebuild every `.opencode/` file.
+
+---
+
+## The org chart
+
+| Department | Sub-agents |
+| --- | --- |
+| **Executive AI** | Strategy · Product Management · Startup Advisor · Decision Engine |
+| **Engineering AI** | Frontend · Backend · Mobile · Desktop · AI/ML · Data · API Architect · System Architect |
+| **Design AI** | UI · UX Researcher · Graphic · Brand · Motion |
+| **DevOps AI** | Linux · Docker · Kubernetes · Cloud · Networking · Security |
+| **QA AI** | Testing · Bug Hunting · Performance · Security Audit |
+| **Documentation AI** | PRDs · READMEs · API Docs · Technical Writing |
+| **Research AI** | AI Research · Market · Competitor · Patent · Academic |
+| **Marketing AI** | SEO · LinkedIn · GitHub · Portfolio · Social Media · Launch Strategy |
+| **Finance AI** | Budgeting · Pricing · Revenue · Startup Finance |
+| **Legal AI** | Licenses · Privacy · Terms · Compliance |
+| **Memory AI** | Long-term · Knowledge Graph · History · Context Retrieval · Learning Engine |
+
+---
+
+## Extending Chief-AI
+
+All agents live in `chief_ai/core/registry.py`. To add a specialist:
+
+```python
+_Spec("eng-game", "Game Engine Expert", "Builds real-time game engines.",
+      ["game", "engine", "unity", "unreal", "godot"])
+```
+
+then:
+
+```bash
+chief generate   # rebuilds .opencode/agents/eng-game.md
+```
+
+Permissions and tools are inherited from the parent department preset and can be
+overridden per-agent. See `chief_ai/core/registry.py` for the full schema.
+
+---
+
+## Testing
 
 ```bash
 pytest
 ```
+
+Covers registry completeness (11 departments, unique IDs, valid permissions),
+router accuracy (intent → correct agent, build-goal expansion, department ordering),
+and generator validity (frontmatter parses, chief is primary with task access).
+
+---
+
+## Roadmap
+
+- [ ] Plug `MemoryAI` retrieval into the Chief's prompt context.
+- [ ] Per-agent `model` overrides in the registry.
+- [ ] Parallel dispatch with dependency-aware scheduling.
+- [ ] Web/streaming UI for live plan visualization.
+
+---
+
+## Contributing
+
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feat/...`).
+3. Make your change in `chief_ai/core/registry.py` (or the relevant module) and
+   run `chief generate` if you touched agents.
+4. Ensure `pytest` passes.
+5. Open a pull request.
+
+---
+
+## License
+
+This project is licensed under the MIT License — see the `LICENSE` file for details.
+
+---
+
+## Acknowledgements
+
+Built on top of [opencode](https://opencode.ai) multi-agent subagents.
