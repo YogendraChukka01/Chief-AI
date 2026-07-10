@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# Chief AI runtime memory
+.chief_memory/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
