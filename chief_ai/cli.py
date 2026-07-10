@@ -33,7 +33,7 @@ def _cmd_plan(args: argparse.Namespace) -> int:
 def _cmd_run(args: argparse.Namespace) -> int:
     executor = OpencodeRunner() if args.opencode else MockExecutor()
     chief = ChiefAI(executor=executor)
-    print(chief.execute(args.goal))
+    print(chief.execute(args.goal, parallel=args.parallel))
     return 0
 
 
@@ -66,6 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run = sub.add_parser("run", help="Plan and execute a goal")
     p_run.add_argument("goal")
     p_run.add_argument("--opencode", action="store_true", help="Use real opencode sub-agents")
+    p_run.add_argument("--parallel", action="store_true", help="Run independent tasks concurrently")
     p_run.set_defaults(func=_cmd_run)
 
     p_gen = sub.add_parser("generate", help="Emit .opencode agent files and opencode.json")
