@@ -42,3 +42,15 @@ def test_generated_chief_is_primary_with_task_access():
             fm = _load_frontmatter(fh.read())
         assert fm["mode"] == "primary"
         assert fm["permissions"]["task"]["*"] == "allow"
+
+
+def test_opencode_json_merge_preserves_existing():
+    with tempfile.TemporaryDirectory() as tmp:
+        with open(os.path.join(tmp, "opencode.json"), "w") as fh:
+            yaml.safe_dump({"model": "anthropic/x", "agent": {"build": {"mode": "primary"}}}, fh)
+        generate(tmp)
+        with open(os.path.join(tmp, "opencode.json")) as fh:
+            cfg = yaml.safe_load(fh)
+        assert cfg["model"] == "anthropic/x"
+        assert cfg["agent"]["chief"] == {"mode": "primary"}
+        assert cfg["agent"]["build"]["mode"] == "primary"

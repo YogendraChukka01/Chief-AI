@@ -98,8 +98,12 @@ class MemoryAI:
         }
 
     # -- context retrieval -------------------------------------------------
-    def retrieve(self, query: str, limit: int = 5) -> list[str]:
-        """Return facts whose key or value shares a meaningful term with ``query``."""
+    def retrieve(self, query: str, limit: int = 5, exclude: tuple[str, ...] = ()) -> list[str]:
+        """Return facts whose key or value shares a meaningful term with ``query``.
+
+        Keys starting with any ``exclude`` prefix are skipped (e.g. per-task
+        ``result:`` entries, which should not resurface as prior context).
+        """
         import re
 
         tokens = {t for t in re.findall(r"[a-z0-9]{3,}", query.lower())}
@@ -107,6 +111,8 @@ class MemoryAI:
             return []
         hits = []
         for k, v in self._state.facts.items():
+            if any(k.startswith(p) for p in exclude):
+                continue
             hay = f"{k} {v}".lower()
             if any(tok in hay for tok in tokens):
                 hits.append(f"{k}: {v}")

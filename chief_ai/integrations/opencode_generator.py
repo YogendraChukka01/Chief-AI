@@ -84,6 +84,32 @@ def render_opencode_json() -> str:
     return yaml.safe_dump(block, default_flow_style=False, sort_keys=False)
 
 
+def _write_opencode_json(target_dir: str) -> str:
+    """Write opencode.json, merging the chief entry into any existing config.
+
+    This avoids clobbering a user's providers, models, or other settings.
+    """
+    path = os.path.join(target_dir, "opencode.json")
+    data: dict = {
+        "$schema": "https://opencode.ai/config.json",
+        "agent": {"chief": {"mode": "primary"}},
+    }
+    if os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                existing = yaml.safe_load(fh) or {}
+            if isinstance(existing, dict):
+                existing.setdefault("$schema", data["$schema"])
+                existing.setdefault("agent", {})
+                existing["agent"]["chief"] = {"mode": "primary"}
+                data = existing
+        except (OSError, yaml.YAMLError):
+            pass
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(yaml.safe_dump(data, default_flow_style=False, sort_keys=False))
+    return path
+
+
 def generate(target_dir: str = ".") -> list[str]:
     """Write all agent files. Returns the list of written paths."""
     agents_path = os.path.join(target_dir, AGENTS_DIR)
@@ -102,9 +128,7 @@ def generate(target_dir: str = ".") -> list[str]:
             fh.write(render_subagent(sub))
         written.append(path)
 
-    cfg_path = os.path.join(target_dir, "opencode.json")
-    with open(cfg_path, "w", encoding="utf-8") as fh:
-        fh.write(render_opencode_json())
+    cfg_path = _write_opencode_json(target_dir)
     written.append(cfg_path)
 
     return written

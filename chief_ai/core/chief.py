@@ -70,8 +70,8 @@ class ChiefAI:
         self.executor = executor or MockExecutor()
 
     # -- memory context ----------------------------------------------------
-    def _memory_context(self, text: str) -> str:
-        hits = self.memory.retrieve(text)
+    def _memory_context(self, text: str, exclude: tuple[str, ...] = ()) -> str:
+        hits = self.memory.retrieve(text, exclude=exclude)
         if not hits:
             return ""
         return "## Retrieved context from memory\n" + "\n".join(f"- {h}" for h in hits)
@@ -96,7 +96,7 @@ class ChiefAI:
         if ctx:
             prompt += f"\n\n{ctx}"
         content = self.executor.run(task.sub_agent, prompt)
-        self.memory.remember(f"result:{task.id}", content)
+        self.memory.log_event(f"result:{task.id}", content)
         self.memory.log_event("dispatch", f"{task.id} -> {agent.id}")
         return Result(task_id=task.id, sub_agent=task.sub_agent, content=content)
 
@@ -131,14 +131,13 @@ class ChiefAI:
 
     # -- synthesize --------------------------------------------------------
     def synthesize(self, plan: Plan, results: list[Result]) -> str:
-        by_id = {r.task_id: r for r in results}
-        ctx = self._memory_context(plan.goal)
+        ctx = self._memory_context(plan.goal, exclude=("result:", "goal"))
         sections = [f"# Chief AI — Integrated Result", "", f"Goal: {plan.goal}", ""]
         if ctx:
             sections.append(ctx)
             sections.append("")
         for task in plan.tasks:
-            res = by_id.get(task.id)
+            res = next((r for r in results if r.task_id == task.id), None)
             if not res:
                 continue
             agent = get_sub_agent(task.sub_agent)

@@ -55,3 +55,13 @@ def test_default_model_emitted_when_env_set():
             assert fm["model"] == "anthropic/test-model"
     finally:
         del os.environ["CHIEF_MODEL"]
+
+
+def test_results_not_leaked_into_synthesis():
+    chief = ChiefAI(executor=MockExecutor())
+    out = chief.execute("Build a mobile app")
+    # Per-task results must appear as structured sections, not as raw
+    # "result:t3: ..." memory noise at the top of the synthesis.
+    assert "result:t" not in out
+    # But the structured sections must still be present.
+    assert "Mobile Expert" in out
