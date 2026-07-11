@@ -45,8 +45,11 @@ class MemoryAI:
     def load(self) -> None:
         if not os.path.exists(self.path):
             return
-        with open(self.path, "r", encoding="utf-8") as fh:
-            raw = json.load(fh)
+        try:
+            with open(self.path, "r", encoding="utf-8") as fh:
+                raw = json.load(fh)
+        except (json.JSONDecodeError, OSError):
+            return
         self._state.facts = raw.get("facts", {})
         self._state.history = raw.get("history", [])
         self._state.nodes = {

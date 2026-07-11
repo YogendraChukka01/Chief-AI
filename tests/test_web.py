@@ -1,5 +1,6 @@
 import json
 import threading
+import urllib.parse
 import urllib.request
 
 from chief_ai.core.chief import ChiefAI, MockExecutor
@@ -52,8 +53,6 @@ def test_web_plan_and_index_endpoints():
 
 
 def test_web_run_sse_streams_events():
-    import urllib.parse
-
     server = make_server(host="127.0.0.1", port=0)
     port = server.server_address[1]
     t = threading.Thread(target=server.serve_forever, daemon=True)

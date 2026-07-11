@@ -10,9 +10,26 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import io
 import json
+import os
 import sys
 from typing import Optional
+
+# Force UTF-8 on Windows before any output is written.
+# This fixes UnicodeEncodeError with characters like (arrow) on cp1252 terminals.
+if sys.platform == "win32":
+    os.environ.setdefault("PYTHONUTF8", "1")
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except (io.UnsupportedOperation, AttributeError):
+            pass
+    if hasattr(sys.stderr, "reconfigure"):
+        try:
+            sys.stderr.reconfigure(encoding="utf-8")
+        except (io.UnsupportedOperation, AttributeError):
+            pass
 
 from .core.chief import ChiefAI, MockExecutor
 from .core.registry import DEPARTMENTS, list_sub_agents

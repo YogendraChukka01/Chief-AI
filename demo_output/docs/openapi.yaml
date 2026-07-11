@@ -1,0 +1,40 @@
+openapi: 3.0.3
+info:
+  title: Portfolio API
+  version: 1.0.0
+paths:
+  /api/projects:
+    get:
+      summary: Get all projects
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+  /api/health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+components:
+  schemas:
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        tech:
+          type: array
+          items:
+            type: string
+        url:
+          type: string
