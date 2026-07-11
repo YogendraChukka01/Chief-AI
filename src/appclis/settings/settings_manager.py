@@ -12,6 +12,7 @@ from rich.table import Table
 from appclis.settings.chen_settings import ChenSettings
 from libagentic.keyring_store import (
     API_KEY_NAMES,
+    clear_all_api_keys,
     get_all_api_keys,
     get_api_key,
     store_all_api_keys,
@@ -20,6 +21,8 @@ from libagentic.logging import get_logger
 
 logger = get_logger("settings")
 console = Console()
+
+MAX_RETRIES = 3
 
 
 class SettingsManager:
@@ -37,7 +40,6 @@ class SettingsManager:
     def ensure_settings_dir(self) -> None:
         """Create the settings directory if it doesn't exist."""
         self.settings_dir.mkdir(parents=True, exist_ok=True)
-        # Set restrictive permissions on Unix
         if os.name != "nt":
             os.chmod(self.settings_dir, 0o700)
 
@@ -72,6 +74,13 @@ class SettingsManager:
             console.print("[yellow]Running onboarding to recreate settings...[/yellow]")
             return self._run_onboarding()
 
+        except ValueError as e:
+            # Pydantic validation error (e.g., missing API keys)
+            logger.warning("Settings validation failed: %s", e)
+            console.print(f"[yellow]Settings validation: {e}[/yellow]")
+            console.print("[yellow]Running onboarding...[/yellow]")
+            return self._run_onboarding()
+
         except Exception as e:
             logger.exception("Unexpected error loading settings")
             console.print(f"[red]Error loading settings: {e}[/red]")
@@ -85,7 +94,6 @@ class SettingsManager:
         """
         self.ensure_settings_dir()
 
-        # Separate secrets from non-secrets
         settings_dict = settings.model_dump()
         secrets = {}
         non_secrets = {}
@@ -93,20 +101,19 @@ class SettingsManager:
         for key, value in settings_dict.items():
             if key in API_KEY_NAMES and value:
                 secrets[key] = value
-                non_secrets[key] = None  # Don't store secrets in JSON
+                # Don't include secrets in JSON at all
             else:
                 non_secrets[key] = value
 
         # Store secrets in keychain
         if secrets:
-            store_all_api_keys(secrets)
-            logger.info("Stored %d secrets in OS keychain", len(secrets))
+            stored = store_all_api_keys(secrets)
+            logger.info("Stored %d secrets in OS keychain", stored)
 
         # Store non-secrets in JSON
         with self.settings_file.open("w", encoding="utf-8") as f:
             json.dump(non_secrets, f, indent=2, ensure_ascii=False)
 
-        # Set restrictive permissions on Unix
         if os.name != "nt":
             os.chmod(self.settings_file, 0o600)
 
@@ -126,7 +133,6 @@ class SettingsManager:
         env_defaults = self._get_env_defaults()
         keychain_keys = get_all_api_keys()
 
-        # Merge keychain and env defaults
         for key in API_KEY_NAMES:
             if keychain_keys.get(key) and not env_defaults.get(key):
                 env_defaults[key] = keychain_keys[key]
@@ -175,7 +181,7 @@ class SettingsManager:
             "context_window",
             "Context window size (tokens)",
             None,
-            env_defaults.get("context_window", 200000),
+            str(env_defaults.get("context_window", 200000)),
             field_type=int,
         )
         if context_window:
@@ -202,13 +208,20 @@ class SettingsManager:
         Returns:
             Dict with environment variable values
         """
+        context_window_str = os.environ.get("CONTEXT_WINDOW", "200000")
+        try:
+            context_window = int(context_window_str)
+        except ValueError:
+            logger.warning("Invalid CONTEXT_WINDOW value: %s, using default", context_window_str)
+            context_window = 200000
+
         return {
             "anthropic_api_key": os.environ.get("ANTHROPIC_API_KEY"),
             "openai_api_key": os.environ.get("OPENAI_API_KEY"),
             "openrouter_api_key": os.environ.get("OPENROUTER_API_KEY"),
             "tavily_api_key": os.environ.get("TAVILY_API_KEY"),
             "language": os.environ.get("LANGUAGE"),
-            "context_window": int(os.environ.get("CONTEXT_WINDOW", "200000")),
+            "context_window": context_window,
         }
 
     def _prompt_for_setting(
@@ -220,7 +233,7 @@ class SettingsManager:
         mask_input: bool = False,
         field_type: type = str,
     ) -> Any | None:
-        """Prompt user for a setting value.
+        """Prompt user for a setting value with retry limit.
 
         Args:
             field_name: The field name in settings
@@ -243,26 +256,33 @@ class SettingsManager:
 
         prompt_text += ": "
 
-        try:
-            if mask_input:
-                value = Prompt.ask(prompt_text, password=True, default=str(default) if default else "")
-            else:
-                value = Prompt.ask(prompt_text, default=str(default) if default else "")
+        for attempt in range(MAX_RETRIES):
+            try:
+                if mask_input:
+                    value = Prompt.ask(prompt_text, password=True, default=str(default) if default else "")
+                else:
+                    value = Prompt.ask(prompt_text, default=str(default) if default else "")
 
-            if not value.strip():
-                return None
+                if not value.strip():
+                    return None
 
-            if field_type is int:
-                return int(value)
-            return value
+                if field_type is int:
+                    return int(value)
+                return value
 
-        except (KeyboardInterrupt, EOFError):
-            console.print("\n[yellow]Onboarding cancelled[/yellow]")
-            raise
+            except (KeyboardInterrupt, EOFError):
+                console.print("\n[yellow]Onboarding cancelled[/yellow]")
+                raise
 
-        except ValueError as e:
-            console.print(f"[red]Invalid value: {e}[/red]")
-            return self._prompt_for_setting(field_name, display_name, url_hint, default, mask_input, field_type)
+            except ValueError as e:
+                remaining = MAX_RETRIES - attempt - 1
+                if remaining > 0:
+                    console.print(f"[red]Invalid value: {e} ({remaining} attempts remaining)[/red]")
+                else:
+                    console.print(f"[red]Invalid value: {e}. No attempts remaining.[/red]")
+                    return None
+
+        return None
 
     def show_current_settings(self) -> None:
         """Display current settings in a formatted table."""
@@ -381,8 +401,12 @@ class SettingsManager:
         if field_type is int:
             try:
                 converted = int(value)
-                if hasattr(field_info, "gt") and field_info.gt is not None and converted <= field_info.gt:
-                    raise ValueError(f"Value must be greater than {field_info.gt}")
+                # Check gt constraint if present
+                metadata = field_info.metadata if hasattr(field_info, "metadata") else []
+                for constraint in metadata:
+                    if hasattr(constraint, "gt") and constraint.gt is not None:
+                        if converted <= constraint.gt:
+                            raise ValueError(f"Value must be greater than {constraint.gt}")
                 return converted
             except ValueError as e:
                 raise ValueError(f"Invalid integer value '{value}' for {key}: {e}") from e
@@ -390,7 +414,7 @@ class SettingsManager:
         return value
 
     def reset_settings(self) -> bool:
-        """Reset settings by deleting the settings file.
+        """Reset settings by deleting the settings file and clearing keychain.
 
         Returns:
             True if settings were reset, False if cancelled
@@ -399,12 +423,22 @@ class SettingsManager:
             console.print("[yellow]No settings file exists to reset.[/yellow]")
             return False
 
-        if not Confirm.ask(f"Are you sure you want to reset all settings?\nThis will delete {self.settings_file}"):
+        if not Confirm.ask(
+            f"Are you sure you want to reset all settings?\n"
+            f"This will delete {self.settings_file} and all stored API keys."
+        ):
             console.print("[yellow]Reset cancelled.[/yellow]")
             return False
 
         try:
+            # Delete JSON file
             self.settings_file.unlink()
+
+            # Clear keychain secrets
+            cleared = clear_all_api_keys()
+            if cleared:
+                console.print(f"[dim]Cleared {cleared} API keys from OS keychain[/dim]")
+
             console.print("[green]Settings reset successfully.[/green]")
             console.print("Run chen again to trigger onboarding.")
             return True

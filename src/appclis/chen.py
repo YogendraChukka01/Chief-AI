@@ -15,6 +15,8 @@ from libagentic.logging import get_logger, setup_logger
 from libagentic.models import TavilyDeps
 from libchatinterface import ChatInterface
 
+# Initialize logging at module load time
+setup_logger(level="INFO")
 logger = get_logger("chen")
 
 load_dotenv()
@@ -46,37 +48,28 @@ def _set_env_from_settings(settings: object) -> None:
 
 async def run() -> None:
     """Initialize and run the Chen chat interface."""
-    try:
-        settings = settings_manager.load_settings()
-        _set_env_from_settings(settings)
+    settings = settings_manager.load_settings()
+    _set_env_from_settings(settings)
 
-        tavily_api_key = environ.get("TAVILY_API_KEY")
-        if not tavily_api_key:
-            logger.warning("TAVILY_API_KEY not set, web search disabled")
-            console.print("[yellow]Warning: TAVILY_API_KEY not found.[/yellow]")
-            console.print("[yellow]Web search functionality will be disabled.[/yellow]")
-            deps = None
-        else:
-            tavily_client = TavilyClient(api_key=tavily_api_key)
-            deps = TavilyDeps(tavily_client=tavily_client)
+    tavily_api_key = environ.get("TAVILY_API_KEY")
+    if not tavily_api_key:
+        logger.warning("TAVILY_API_KEY not set, web search disabled")
+        console.print("[yellow]Warning: TAVILY_API_KEY not found.[/yellow]")
+        console.print("[yellow]Web search functionality will be disabled.[/yellow]")
+        deps = None
+    else:
+        tavily_client = TavilyClient(api_key=tavily_api_key)
+        deps = TavilyDeps(tavily_client=tavily_client)
 
-        agent = get_chen_agent(language=settings.language or "English")
-        chat_interface = ChatInterface(
-            agent=agent,
-            deps=deps,
-            app_name="chen",
-            assistant_name="Chen",
-            context_window=settings.context_window or 200000,
-        )
-        await chat_interface.run_chat()
-
-    except KeyboardInterrupt:
-        raise
-
-    except Exception as e:
-        logger.exception("Error starting Chen")
-        console.print(f"[red]Error starting Chen: {e}[/red]")
-        raise
+    agent = get_chen_agent(language=settings.language or "English")
+    chat_interface = ChatInterface(
+        agent=agent,
+        deps=deps,
+        app_name="chen",
+        assistant_name="Chen",
+        context_window=settings.context_window or 200000,
+    )
+    await chat_interface.run_chat()
 
 
 @app.callback(invoke_without_command=True)
@@ -115,7 +108,7 @@ def get(key: str) -> None:
 
 
 @config_app.command()
-def set(key: str, value: str) -> None:
+def set_config(key: str, value: str) -> None:
     """Set a specific configuration setting value."""
     try:
         settings_manager.set_setting(key, value)
@@ -148,5 +141,4 @@ def onboard() -> None:
 
 
 if __name__ == "__main__":
-    setup_logger(level="INFO")
     app()

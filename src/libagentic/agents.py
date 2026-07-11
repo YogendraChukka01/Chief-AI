@@ -7,7 +7,6 @@ from pydantic_ai.mcp import MCPServer
 from typing_extensions import Doc
 
 from libagentic.logging import get_logger
-from libagentic.models import TavilyDeps
 from libagentic.prompts import CHEN_SYSTEM_PROMPT, CHIEF_SYSTEM_PROMPT, TITLE_GENERATION_SYSTEM_PROMPT
 from libagentic.providers import get_default_model
 from libagentic.tools.search import web_search
@@ -30,12 +29,12 @@ def get_chief_agent(
         Configured Chief agent
     """
     settings = ModelSettings(temperature=temperature)
-    fallback_model = get_default_model()
+    model = get_default_model()
 
     logger.info("Creating Chief agent with temperature %.2f", temperature)
 
     return Agent(
-        fallback_model,
+        model,
         name="Chief",
         system_prompt=CHIEF_SYSTEM_PROMPT,
         mcp_servers=mcps,
@@ -58,13 +57,15 @@ def get_chen_agent(
     Returns:
         Configured Chen agent
     """
+    from libagentic.models import TavilyDeps
+
     settings = ModelSettings(temperature=temperature)
-    fallback_model = get_default_model()
+    model = get_default_model()
 
     logger.info("Creating Chen agent with language=%s, temperature=%.2f", language, temperature)
 
     return Agent(
-        fallback_model,
+        model,
         name="Chen",
         system_prompt=CHEN_SYSTEM_PROMPT.format(language=language),
         mcp_servers=mcps,
@@ -81,8 +82,6 @@ def get_title_agent(
     temperature: float = 0.1,
 ) -> Agent:
     """Create a lightweight agent for generating chat session titles.
-
-    Uses a fast, low-cost model optimized for concise title generation.
 
     Args:
         temperature: Low temperature for consistent titles
@@ -110,9 +109,6 @@ def get_title_agent(
 def get_compression_agent() -> Agent:
     """Create a lightweight agent for compressing conversation history.
 
-    Uses low temperature for consistent, meaningful compression that
-    preserves context while reducing token count.
-
     Returns:
         Configured context compression agent
     """
@@ -129,12 +125,12 @@ Output a flowing narrative that preserves:
 - Context needed for future messages"""
 
     settings = ModelSettings(temperature=0.1)
-    fallback_model = get_default_model()
+    model = get_default_model()
 
     logger.info("Creating compression agent")
 
     return Agent(
-        fallback_model,
+        model,
         name="ContextCompressor",
         system_prompt=compression_prompt,
         model_settings=settings,

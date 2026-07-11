@@ -61,19 +61,31 @@ def get_logger(name: str | None = None) -> logging.Logger:
 
 
 class LogContext:
-    """Context manager for structured logging with extra context."""
+    """Context manager for structured logging with extra context.
 
-    def __init__(self, logger: logging.Logger, **kwargs: Any) -> None:
-        self.logger = logger
+    Note: This modifies the global log record factory. Use with caution
+    in async code where multiple contexts may overlap.
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize with extra context fields.
+
+        Args:
+            kwargs: Key-value pairs to add to log records
+        """
         self.extra = kwargs
-        self.old_factory = None
+        self._old_factory: logging.LogRecordFactory | None = None
 
     def __enter__(self) -> "LogContext":
-        old_factory = logging.getLogRecordFactory()
+        """Save current factory and install enhanced factory."""
+        self._old_factory = logging.getLogRecordFactory()
+
+        old_factory = self._old_factory
+        extra = self.extra
 
         def record_factory(*args: Any, **kw: Any) -> logging.LogRecord:
             record = old_factory(*args, **kw)
-            for key, value in self.extra.items():
+            for key, value in extra.items():
                 setattr(record, key, value)
             return record
 
@@ -81,4 +93,6 @@ class LogContext:
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        logging.setLogRecordFactory(self.old_factory or logging.LogRecord)
+        """Restore the original log record factory."""
+        if self._old_factory is not None:
+            logging.setLogRecordFactory(self._old_factory)

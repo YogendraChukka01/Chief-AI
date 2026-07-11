@@ -1,6 +1,6 @@
 [project]
 name = "chief-ai"
-version = "0.2.0"
+version = "0.2.1"
 description = "AI agent framework with Chief and Chen, a conversational AI psychologist with web search and multi-provider support in your terminal."
 authors = [
     { name = "Batista Harahap", email = "batista@bango29.com" }
@@ -22,19 +22,13 @@ dependencies = [
     "pydantic-ai>=1.0.1",
     "pydantic-settings>=2.10.1",
     "typer>=0.17.4",
-    "logfire>=4.4.0",
-    "pydantic-graph>=1.0.1",
-    "beanie>=2.0.0",
-    "coolname>=2.2.0",
     "tavily-python>=0.7.11",
     "asyncer>=0.0.8",
-    "uvicorn>=0.35.0",
     "python-dotenv>=1.1.1",
     "tiktoken>=0.11.0",
     "uuid7>=0.1.0",
     "keyring>=25.0.0",
     "rich>=14.0.0",
-    "typing_extensions>=4.0.0;python_version<'3.11'",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"
@@ -49,16 +43,16 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/tistaharahap/chief-ai"
-Repository = "https://github.com/tistaharahap/chief-ai"
-Issues = "https://github.com/tistaharahap/chief-ai/issues"
+Homepage = "https://github.com/YogendraChukka01/Chief-AI"
+Repository = "https://github.com/YogendraChukka01/Chief-AI"
+Issues = "https://github.com/YogendraChukka01/Chief-AI/issues"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/appclis", "src/libagentic", "src/libshared", "src/libchatinterface"]
+packages = ["src/appclis", "src/libagentic", "src/libchatinterface"]
 
 [project.scripts]
 chief = "appclis.chief:app"

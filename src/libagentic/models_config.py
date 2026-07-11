@@ -50,7 +50,7 @@ OPENAI_GPT_4O = ModelConfig(
     max_context=128_000,
 )
 
-# OpenRouter Models (Free tier)
+# OpenRouter Models
 OPENROUTER_DEEPSEEK_FREE = ModelConfig(
     name="deepseek/deepseek-chat-v3.1:free",
     provider="openrouter",
@@ -79,10 +79,9 @@ class AgentModels:
     compressor: ModelConfig = field(default_factory=lambda: OPENROUTER_DEEPSEEK_FREE)
 
 
-# Global defaults
 DEFAULT_MODELS = AgentModels()
 
-# Model lookup by name (normalized)
+# Model lookup by name - exact matches only for deterministic behavior
 MODEL_REGISTRY: dict[str, ModelConfig] = {
     "claude-sonnet-4": ANTHROPIC_CLAUDE_SONNET_4,
     "claude-3-5-haiku": ANTHROPIC_CLAUDE_3_5_HAIKU,
@@ -94,19 +93,36 @@ MODEL_REGISTRY: dict[str, ModelConfig] = {
 
 
 def get_model_config(model_name: str) -> ModelConfig | None:
-    """Look up model config by name or partial match."""
+    """Look up model config by name with exact match priority.
+
+    Args:
+        model_name: The model name or alias to look up
+
+    Returns:
+        ModelConfig if found, None otherwise
+    """
     normalized = model_name.lower().strip()
 
-    # Exact match
+    # Exact match first (deterministic)
     if normalized in MODEL_REGISTRY:
         return MODEL_REGISTRY[normalized]
 
-    # Partial match
-    for key, config in MODEL_REGISTRY.items():
-        if normalized in key or key in normalized:
+    # Check full model name in registry values
+    for config in MODEL_REGISTRY.values():
+        if normalized == config.name.lower():
             return config
 
-    return None
+    # Substring match in keys (prefer longer/more specific match)
+    best_match: ModelConfig | None = None
+    best_match_len = 0
+
+    for key, config in MODEL_REGISTRY.items():
+        if normalized in key or key in normalized:
+            if len(key) > best_match_len:
+                best_match = config
+                best_match_len = len(key)
+
+    return best_match
 
 
 def calculate_cost(
@@ -115,8 +131,23 @@ def calculate_cost(
     model: ModelConfig,
     cached_tokens: int = 0,
 ) -> float:
-    """Calculate cost in USD for given token counts."""
-    cost = (input_tokens / 1000) * model.input_cost_per_1k
+    """Calculate cost in USD for given token counts.
+
+    Cached tokens are a SUBSET of input tokens. We charge the non-cached
+    input tokens at full price and cached tokens at the cached price.
+
+    Args:
+        input_tokens: Total input tokens (including cached)
+        output_tokens: Output tokens
+        model: Model configuration with pricing
+        cached_tokens: Number of tokens served from cache
+
+    Returns:
+        Cost in USD
+    """
+    # Cached tokens are a subset of input tokens - don't double count
+    non_cached_input = max(0, input_tokens - cached_tokens)
+    cost = (non_cached_input / 1000) * model.input_cost_per_1k
     cost += (output_tokens / 1000) * model.output_cost_per_1k
 
     if cached_tokens and model.cached_cost_per_1k:

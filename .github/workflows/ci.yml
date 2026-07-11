@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: uv sync --frozen
+      - run: uv sync --frozen --extra dev
       - run: uv run ruff check src/ tests/
       - run: uv run ruff format --check src/ tests/
 
@@ -31,8 +31,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: uv sync --frozen
-      - run: uv run python -m py_compile src/libagentic/*.py
+      - run: uv sync --frozen --extra dev
+      - run: uv run mypy src/libagentic/ src/appclis/ --ignore-missing-imports
 
   test:
     runs-on: ubuntu-latest
@@ -47,5 +47,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: uv sync --frozen
+      - run: uv sync --frozen --extra dev
       - run: uv run pytest tests/ -v --tb=short

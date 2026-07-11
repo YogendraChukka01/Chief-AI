@@ -1,5 +1,8 @@
 """Tests for provider configurations."""
 
+import os
+from unittest.mock import patch
+
 import pytest
 
 from libagentic.providers import (
@@ -33,6 +36,12 @@ class TestProviderCreation:
         model = get_anthropic_model("claude-3-5-haiku-latest")
         assert model is not None
 
+    def test_openrouter_requires_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Should raise ValueError when OPENROUTER_API_KEY not set."""
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
+            get_openrouter_model()
+
 
 class TestDefaultModel:
     """Tests for default model selection."""
@@ -43,8 +52,10 @@ class TestDefaultModel:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
-        with pytest.raises(ValueError, match="No API keys found"):
-            get_default_model()
+        # Mock load_dotenv to prevent reading .env file
+        with patch("libagentic.providers.load_dotenv"):
+            with pytest.raises(ValueError, match="No API keys found"):
+                get_default_model()
 
     def test_default_model_with_anthropic_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Should create fallback with Anthropic only."""
@@ -52,8 +63,9 @@ class TestDefaultModel:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
-        model = get_default_model(openai_model_name=None, openrouter_model_name=None)
-        assert model is not None
+        with patch("libagentic.providers.load_dotenv"):
+            model = get_default_model(openai_model_name=None, openrouter_model_name=None)
+            assert model is not None
 
     def test_default_model_with_multiple_providers(
         self, monkeypatch: pytest.MonkeyPatch
@@ -63,5 +75,6 @@ class TestDefaultModel:
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
-        model = get_default_model()
-        assert model is not None
+        with patch("libagentic.providers.load_dotenv"):
+            model = get_default_model()
+            assert model is not None

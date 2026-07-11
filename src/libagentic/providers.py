@@ -12,6 +12,17 @@ from libagentic.logging import get_logger
 
 logger = get_logger("providers")
 
+# Load .env once at module import
+_dotenv_loaded = False
+
+
+def _ensure_dotenv() -> None:
+    """Load .env file once."""
+    global _dotenv_loaded
+    if not _dotenv_loaded:
+        load_dotenv()
+        _dotenv_loaded = True
+
 
 def get_openrouter_model(model_name: str = "deepseek/deepseek-chat-v3.1:free") -> OpenAIChatModel:
     """Create an OpenAI-compatible model configured for OpenRouter.
@@ -23,6 +34,8 @@ def get_openrouter_model(model_name: str = "deepseek/deepseek-chat-v3.1:free") -
         OpenAIChatModel configured for OpenRouter
     """
     api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        raise ValueError("OPENROUTER_API_KEY environment variable is required for OpenRouter models")
     provider = OpenAIProvider(base_url="https://openrouter.ai/api/v1", api_key=api_key)
     return OpenAIChatModel(model_name, provider=provider)
 
@@ -40,7 +53,7 @@ def get_openai_model(model_name: str = "gpt-5-2025-08-07") -> OpenAIChatModel:
 
 
 def get_anthropic_model(model_name: str = "claude-sonnet-4-20250514") -> AnthropicModel:
-    """Create an Anthropic model using native Anthropic provider.
+    """Create an Anthropic model.
 
     Args:
         model_name: The Anthropic model identifier
@@ -59,9 +72,9 @@ def get_default_model(
     """Get the default model configuration with automatic provider selection.
 
     Args:
-        anthropic_model_name: The Anthropic model identifier
-        openai_model_name: The OpenAI model identifier
-        openrouter_model_name: The OpenRouter model identifier
+        anthropic_model_name: The Anthropic model identifier (None to disable)
+        openai_model_name: The OpenAI model identifier (None to disable)
+        openrouter_model_name: The OpenRouter model identifier (None to disable)
 
     Returns:
         FallbackModel configured for the specified providers
@@ -69,7 +82,7 @@ def get_default_model(
     Raises:
         ValueError: If no API keys are configured
     """
-    load_dotenv()
+    _ensure_dotenv()
 
     anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
     openai_api_key = os.environ.get("OPENAI_API_KEY")
