@@ -1,7 +1,7 @@
 """Cost tracking and calculation utilities for chat sessions."""
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pydantic_ai.usage import RunUsage
 
@@ -15,25 +15,25 @@ class ModelCosts:
     cached_cost_per_1k: float | None = None  # USD per 1K cached tokens (if supported)
 
 
-# Model pricing configuration (as of January 2025)
+# Model pricing configuration - values are per-1K tokens in USD
 MODEL_PRICING: dict[str, ModelCosts] = {
-    "claude-3-5-sonnet-20241022": ModelCosts(3.00, 15.00),
-    "claude-3-5-sonnet-latest": ModelCosts(3.00, 15.00),
-    "claude-sonnet-4-20250514": ModelCosts(15.00, 75.00),
-    "claude-3-5-haiku-20241022": ModelCosts(0.25, 1.25),
-    "claude-3-5-haiku-latest": ModelCosts(0.25, 1.25),
-    "claude-3-haiku-20240307": ModelCosts(0.25, 1.25),
-    "gpt-4o": ModelCosts(2.50, 10.00),
-    "gpt-4o-2024-11-20": ModelCosts(2.50, 10.00),
-    "gpt-5-2025-08-07": ModelCosts(5.00, 20.00),
-    "gpt-4o-mini": ModelCosts(0.15, 0.60),
-    "gpt-4-turbo": ModelCosts(10.00, 30.00),
-    "deepseek/deepseek-chat-v3.1:free": ModelCosts(0.00, 0.00),
-    "deepseek/deepseek-chat-v3.1": ModelCosts(0.14, 0.28),
-    "anthropic/claude-3.5-sonnet": ModelCosts(3.00, 15.00),
-    "anthropic/claude-3.5-haiku": ModelCosts(0.25, 1.25),
-    "openai/gpt-4o": ModelCosts(2.50, 10.00),
-    "openai/gpt-4o-mini": ModelCosts(0.15, 0.60),
+    "claude-3-5-sonnet-20241022": ModelCosts(0.003, 0.015),
+    "claude-3-5-sonnet-latest": ModelCosts(0.003, 0.015),
+    "claude-sonnet-4-20250514": ModelCosts(0.015, 0.075),
+    "claude-3-5-haiku-20241022": ModelCosts(0.00025, 0.00125),
+    "claude-3-5-haiku-latest": ModelCosts(0.00025, 0.00125),
+    "claude-3-haiku-20240307": ModelCosts(0.00025, 0.00125),
+    "gpt-4o": ModelCosts(0.0025, 0.01),
+    "gpt-4o-2024-11-20": ModelCosts(0.0025, 0.01),
+    "gpt-5-2025-08-07": ModelCosts(0.005, 0.02),
+    "gpt-4o-mini": ModelCosts(0.00015, 0.0006),
+    "gpt-4-turbo": ModelCosts(0.01, 0.03),
+    "deepseek/deepseek-chat-v3.1:free": ModelCosts(0.0, 0.0),
+    "deepseek/deepseek-chat-v3.1": ModelCosts(0.00014, 0.00028),
+    "anthropic/claude-3.5-sonnet": ModelCosts(0.003, 0.015),
+    "anthropic/claude-3.5-haiku": ModelCosts(0.00025, 0.00125),
+    "openai/gpt-4o": ModelCosts(0.0025, 0.01),
+    "openai/gpt-4o-mini": ModelCosts(0.00015, 0.0006),
 }
 
 
@@ -54,12 +54,8 @@ class UsageCosts:
 class SessionCosts:
     """Aggregated costs for an entire session."""
 
-    total_usage: UsageCosts
-    model_breakdown: dict[str, UsageCosts]
-
-    def __init__(self) -> None:
-        self.total_usage = UsageCosts()
-        self.model_breakdown = {}
+    total_usage: UsageCosts = field(default_factory=UsageCosts)
+    model_breakdown: dict[str, UsageCosts] = field(default_factory=dict)
 
 
 def normalize_model_name(model_name: str) -> str:
@@ -67,8 +63,13 @@ def normalize_model_name(model_name: str) -> str:
     if not model_name:
         return model_name
 
-    model_name = re.sub(r"^(anthropic|openai|google|deepseek)/", "", model_name, flags=re.IGNORECASE)
-    model_name = re.sub(r"^(anthropic:|openai:|google-gla:|deepseek/)", "", model_name, flags=re.IGNORECASE)
+    # Single combined regex to strip all known prefixes
+    model_name = re.sub(
+        r"^(anthropic/|openai/|google/|google-gla:|deepseek/|anthropic:|openai:)",
+        "",
+        model_name,
+        flags=re.IGNORECASE,
+    )
 
     return model_name.lower()
 
@@ -98,19 +99,11 @@ def calculate_usage_cost(usage: RunUsage, model_name: str | None = None) -> Usag
 
         if not model_costs:
             for pricing_key, pricing in MODEL_PRICING.items():
-                if (
-                    normalized_name in pricing_key
-                    or pricing_key in normalized_name
-                    or any(part in pricing_key for part in normalized_name.split("-")[:2])
-                ):
+                if normalized_name == pricing_key.lower():
                     model_costs = pricing
                     break
 
         if model_costs:
-            # BUG FIX: Cached tokens are a SUBSET of input tokens
-            # We should NOT double-count them. The correct formula is:
-            # non_cached_input = input_tokens - cached_tokens
-            # cost = (non_cached_input * input_price) + (cached_tokens * cached_price)
             non_cached_input = max(0, costs.input_tokens - costs.cached_tokens)
             input_cost = (non_cached_input / 1000.0) * model_costs.input_cost_per_1k
             output_cost = (costs.output_tokens / 1000.0) * model_costs.output_cost_per_1k

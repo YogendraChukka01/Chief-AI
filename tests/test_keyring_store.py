@@ -12,6 +12,18 @@ from libagentic.keyring_store import (
 )
 
 
+def _keyring_available() -> bool:
+    """Check if keyring backend is available."""
+    try:
+        import keyring
+
+        keyring.set_password("test-backend-check", "test", "test")
+        keyring.delete_password("test-backend-check", "test")
+        return True
+    except Exception:
+        return False
+
+
 @pytest.mark.skipif(
     not _keyring_available(),
     reason="Keyring backend not available in test environment",
@@ -58,15 +70,3 @@ class TestKeyringStore:
         result = get_all_api_keys()
         assert isinstance(result, dict)
         assert len(result) == len(API_KEY_NAMES)
-
-
-def _keyring_available() -> bool:
-    """Check if keyring backend is available."""
-    try:
-        import keyring
-
-        keyring.set_password("test-backend-check", "test", "test")
-        keyring.delete_password("test-backend-check", "test")
-        return True
-    except Exception:
-        return False
