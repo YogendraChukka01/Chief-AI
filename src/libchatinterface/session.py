@@ -13,7 +13,7 @@ from pydantic_ai.usage import RunUsage
 from pydantic_core import to_jsonable_python
 
 from rich.console import Console
-from uuid_extensions import uuid7str
+from uuid import uuid7
 
 from libchatinterface.costs import (
     SessionCosts,
@@ -31,7 +31,7 @@ class SessionManager:
             context_window = int(os.getenv("CONTEXT_WINDOW", "200000"))
         self.app_name = app_name
         self.sessions_dir = Path.home() / f".{app_name}" / "sessions"
-        self.session_id = uuid7str()
+        self.session_id = str(uuid7())
         self.session_timestamp = datetime.now(UTC).isoformat().replace(":", "_")
         self.session_dir = self.sessions_dir / self.session_id
         self.metadata_file = self.session_dir / "metadata.json"

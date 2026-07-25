@@ -1,10 +1,17 @@
 """Pytest configuration and fixtures for chief-ai tests."""
 
 import os
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+
+# Add src/ to sys.path so tests can import libagentic, libchatinterface, appclis
+# when the package is not installed in editable mode.
+_src_dir = str(Path(__file__).resolve().parent.parent / "src")
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
 
 
 @pytest.fixture

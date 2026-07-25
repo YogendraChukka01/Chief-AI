@@ -16,22 +16,22 @@ from libagentic.providers import (
 class TestProviderCreation:
     """Tests for model provider creation."""
 
-    def test_create_anthropic_model(self) -> None:
+    def test_create_anthropic_model(self, mock_env_vars: pytest.MonkeyPatch) -> None:
         """Should create Anthropic model successfully."""
         model = get_anthropic_model()
         assert model is not None
 
-    def test_create_openai_model(self) -> None:
+    def test_create_openai_model(self, mock_env_vars: pytest.MonkeyPatch) -> None:
         """Should create OpenAI model successfully."""
         model = get_openai_model()
         assert model is not None
 
-    def test_create_openrouter_model(self) -> None:
+    def test_create_openrouter_model(self, mock_env_vars: pytest.MonkeyPatch) -> None:
         """Should create OpenRouter model successfully."""
         model = get_openrouter_model()
         assert model is not None
 
-    def test_create_anthropic_model_custom_name(self) -> None:
+    def test_create_anthropic_model_custom_name(self, mock_env_vars: pytest.MonkeyPatch) -> None:
         """Should create Anthropic model with custom name."""
         model = get_anthropic_model("claude-3-5-haiku-latest")
         assert model is not None

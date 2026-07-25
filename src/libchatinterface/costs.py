@@ -19,21 +19,17 @@ class ModelCosts:
 MODEL_PRICING: dict[str, ModelCosts] = {
     "claude-3-5-sonnet-20241022": ModelCosts(0.003, 0.015),
     "claude-3-5-sonnet-latest": ModelCosts(0.003, 0.015),
-    "claude-sonnet-4-20250514": ModelCosts(0.015, 0.075),
-    "claude-3-5-haiku-20241022": ModelCosts(0.00025, 0.00125),
-    "claude-3-5-haiku-latest": ModelCosts(0.00025, 0.00125),
-    "claude-3-haiku-20240307": ModelCosts(0.00025, 0.00125),
+    "claude-sonnet-4-20250514": ModelCosts(0.003, 0.015),
+    "claude-3-5-haiku-20241022": ModelCosts(0.0008, 0.004),
+    "claude-3-5-haiku-latest": ModelCosts(0.0008, 0.004),
+    "claude-3-haiku-20240307": ModelCosts(0.0008, 0.004),
     "gpt-4o": ModelCosts(0.0025, 0.01),
     "gpt-4o-2024-11-20": ModelCosts(0.0025, 0.01),
-    "gpt-5-2025-08-07": ModelCosts(0.005, 0.02),
+    "gpt-5-2025-08-07": ModelCosts(0.01, 0.03),
     "gpt-4o-mini": ModelCosts(0.00015, 0.0006),
     "gpt-4-turbo": ModelCosts(0.01, 0.03),
-    "deepseek/deepseek-chat-v3.1:free": ModelCosts(0.0, 0.0),
-    "deepseek/deepseek-chat-v3.1": ModelCosts(0.00014, 0.00028),
-    "anthropic/claude-3.5-sonnet": ModelCosts(0.003, 0.015),
-    "anthropic/claude-3.5-haiku": ModelCosts(0.00025, 0.00125),
-    "openai/gpt-4o": ModelCosts(0.0025, 0.01),
-    "openai/gpt-4o-mini": ModelCosts(0.00015, 0.0006),
+    "deepseek-chat-v3.1:free": ModelCosts(0.0, 0.0),
+    "deepseek-chat-v3.1": ModelCosts(0.00021, 0.00079),
 }
 
 
@@ -63,15 +59,16 @@ def normalize_model_name(model_name: str) -> str:
     if not model_name:
         return model_name
 
-    # Single combined regex to strip all known prefixes
-    model_name = re.sub(
-        r"^(anthropic/|openai/|google/|google-gla:|deepseek/|anthropic:|openai:)",
-        "",
-        model_name,
-        flags=re.IGNORECASE,
-    )
+    # Convert to lowercase and strip whitespace
+    normalized = model_name.lower().strip()
 
-    return model_name.lower()
+    # Strip common prefixes for lookup
+    for prefix in ["anthropic/", "openai/", "google/", "deepseek/"]:
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix):]
+            break
+
+    return normalized
 
 
 def calculate_usage_cost(usage: RunUsage, model_name: str | None = None) -> UsageCosts:
