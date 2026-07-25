@@ -125,9 +125,8 @@ def store_all_api_keys(keys: dict[str, str]) -> int:
     """
     stored = 0
     for name, value in keys.items():
-        if name in API_KEY_NAMES and value:
-            if store_api_key(name, value):
-                stored += 1
+        if name in API_KEY_NAMES and value and store_api_key(name, value):
+            stored += 1
     return stored
 
 

@@ -6,7 +6,6 @@ from libagentic.models_config import (
     ANTHROPIC_CLAUDE_SONNET_4,
     MODEL_REGISTRY,
     OPENROUTER_DEEPSEEK_FREE,
-    ModelConfig,
     calculate_cost,
     get_model_config,
 )

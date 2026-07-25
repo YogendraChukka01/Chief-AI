@@ -40,7 +40,14 @@ def test_decompose_sets_dependency_dag():
 def test_parallel_execution_returns_all_sections():
     chief = ChiefAI(executor=MockExecutor())
     out = chief.execute("Build the next version of my portfolio", parallel=True)
-    for agent in ("Strategy", "Frontend Expert", "UI Designer", "Testing", "READMEs", "Launch Strategy"):
+    for agent in (
+        "Strategy",
+        "Frontend Expert",
+        "UI Designer",
+        "Testing",
+        "READMEs",
+        "Launch Strategy",
+    ):
         assert agent in out
 
 

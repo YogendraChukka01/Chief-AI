@@ -2,7 +2,7 @@
 
 from libchatinterface.cli import ChatInterface
 from libchatinterface.costs import SessionCosts, calculate_usage_cost, format_token_count
-from libchatinterface.session import SessionManager, ResumableSessionManager, SessionLister
+from libchatinterface.session import ResumableSessionManager, SessionLister, SessionManager
 
 __all__ = [
     "ChatInterface",

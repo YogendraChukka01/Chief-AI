@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import Any
 
 from pydantic_ai.messages import (
-    ModelRequest,
     AgentStreamEvent,
     FunctionToolCallEvent,
     FunctionToolResultEvent,
+    ModelRequest,
 )
 from rich.console import Console
 from rich.markdown import Markdown
@@ -54,9 +54,10 @@ class HistoryManager:
                         if data.get("type") == "user_prompt" and "content" in data:
                             content = data["content"]
                             model_request = data.get("model_request")
-                            if isinstance(model_request, dict):
-                                self.history.append(content)
-                            elif isinstance(model_request, str) and model_request.startswith("ModelRequest("):
+                            if isinstance(model_request, dict) or (
+                                isinstance(model_request, str)
+                                and model_request.startswith("ModelRequest(")
+                            ):
                                 self.history.append(content)
                             else:
                                 self.history.append(content)
@@ -124,10 +125,12 @@ class RichHistoryPrompt:
         """Get a single character from stdin."""
         if os.name == "nt":
             import msvcrt
+
             return msvcrt.getch().decode("utf-8", errors="ignore")
         else:
             import termios
             import tty
+
             fd = sys.stdin.fileno()
             old_settings = termios.tcgetattr(fd)
             try:
@@ -180,6 +183,7 @@ class RichHistoryPrompt:
 
         try:
             import readline
+
             readline.clear_history()
             for item in self.history_manager.get_history():
                 readline.add_history(item)
@@ -251,6 +255,7 @@ class ChatInterface:
         self.running = True
 
         from libchatinterface.session import SessionManager
+
         self.session_manager = SessionManager(app_name, context_window=context_window)
 
         system_prompt = getattr(agent, "system_prompt", None)
@@ -273,7 +278,7 @@ class ChatInterface:
                 else:
                     self.console.print(f"[dim cyan]Using tool: {tool_name}[/dim cyan]")
             elif isinstance(event, FunctionToolResultEvent):
-                self.console.print(f"[dim green]Tool completed successfully[/dim green]")
+                self.console.print("[dim green]Tool completed successfully[/dim green]")
 
     def show_welcome(self):
         """Display welcome message."""
@@ -307,8 +312,13 @@ class ChatInterface:
             return self.agent
 
         from pydantic_ai import Agent
+
         original_prompt = getattr(self.agent, "system_prompt", "")
-        extended_prompt = f"{original_prompt}\n\nPrevious Session Context: {self.session_manager.compressed_context}"
+        extended_prompt = (
+            f"{original_prompt}\n\n"
+            f"Previous Session Context: "
+            f"{self.session_manager.compressed_context}"
+        )
 
         return Agent(
             model=self.agent.model,
@@ -336,7 +346,8 @@ class ChatInterface:
 
         if total.input_tokens > 0 or total.output_tokens > 0:
             tokens_text = (
-                f"Tokens: {format_token_count(total.input_tokens)} in, {format_token_count(total.output_tokens)} out"
+                f"Tokens: {format_token_count(total.input_tokens)} in, "
+                f"{format_token_count(total.output_tokens)} out"
             )
             if total.cached_tokens > 0:
                 tokens_text += f", {format_token_count(total.cached_tokens)} cached"
@@ -386,13 +397,17 @@ Available commands:
                 return True
 
             resumed_manager = ResumableSessionManager.from_existing_session(
-                selected_session_dir, self.app_name, context_window=self.session_manager.context_window
+                selected_session_dir,
+                self.app_name,
+                context_window=self.session_manager.context_window,
             )
 
             session_info = resumed_manager.get_session_info()
             self.console.print(f"[green]Resumed session: {session_info['title']}[/green]")
+            last_activity = session_info["last_message_timestamp"] or "Unknown"
             self.console.print(
-                f"[dim]Messages: {session_info['message_count']}, Last activity: {session_info['last_message_timestamp'] or 'Unknown'}[/dim]"
+                f"[dim]Messages: {session_info['message_count']}, "
+                f"Last activity: {last_activity}[/dim]"
             )
 
             self.session_manager = resumed_manager
@@ -457,38 +472,58 @@ Available commands:
                     all_history = self.session_manager.get_pydantic_message_history()
                     if all_history and len(all_history) > 0:
                         last_msg = all_history[-1]
-                        if (hasattr(last_msg, 'parts') and len(last_msg.parts) > 0 and
-                            hasattr(last_msg.parts[0], 'content') and
-                            last_msg.parts[0].content == message):
+                        if (
+                            hasattr(last_msg, "parts")
+                            and len(last_msg.parts) > 0
+                            and hasattr(last_msg.parts[0], "content")
+                            and last_msg.parts[0].content == message
+                        ):
                             message_history = all_history[:-1]
                         else:
                             message_history = all_history
                     else:
                         message_history = all_history
 
-                might_use_tools = any(keyword in message.lower() for keyword in [
-                    'search', 'web', 'internet', 'find', 'look up', 'latest', 'current',
-                    'price', 'weather', 'news', 'time', 'date'
-                ])
+                might_use_tools = any(
+                    keyword in message.lower()
+                    for keyword in [
+                        "search",
+                        "web",
+                        "internet",
+                        "find",
+                        "look up",
+                        "latest",
+                        "current",
+                        "price",
+                        "weather",
+                        "news",
+                        "time",
+                        "date",
+                    ]
+                )
 
                 if might_use_tools:
                     status.update("[bold blue]Processing request...")
                     result = await current_agent.run(
-                        message,
-                        deps=self.deps,
-                        message_history=message_history
+                        message, deps=self.deps, message_history=message_history
                     )
+
                     class DummyStreamContext:
                         def __init__(self, run_result):
                             self.result = run_result
+
                         async def __aenter__(self):
                             return self
+
                         async def __aexit__(self, *args):
                             pass
+
                         async def stream_text(self, delta=False, debounce_by=0):
                             yield self.result.output
+
                         def all_messages(self):
                             return self.result.all_messages()
+
                         def usage(self):
                             return self.result.usage()
 
@@ -499,7 +534,7 @@ Available commands:
                         message,
                         deps=self.deps,
                         message_history=message_history,
-                        event_stream_handler=self._tool_event_handler
+                        event_stream_handler=self._tool_event_handler,
                     )
                     result = await stream_context.__aenter__()
 
@@ -530,7 +565,7 @@ Available commands:
                 try:
                     all_messages = result.all_messages()
                     if message_history and len(message_history) > 0:
-                        new_messages = all_messages[len(message_history):]
+                        new_messages = all_messages[len(message_history) :]
                     else:
                         new_messages = [
                             msg
@@ -540,10 +575,15 @@ Available commands:
                         ]
 
                     if new_messages:
-                        self.session_manager.log_pydantic_messages(new_messages, skip_user_message=message)
+                        self.session_manager.log_pydantic_messages(
+                            new_messages, skip_user_message=message
+                        )
                     else:
                         from pydantic_ai.messages import ModelResponse
-                        assistant_responses = [msg for msg in all_messages if isinstance(msg, ModelResponse)]
+
+                        assistant_responses = [
+                            msg for msg in all_messages if isinstance(msg, ModelResponse)
+                        ]
                         if assistant_responses:
                             latest_response = assistant_responses[-1]
                             self.session_manager.log_pydantic_messages([latest_response])

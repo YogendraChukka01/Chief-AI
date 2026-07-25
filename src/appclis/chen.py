@@ -101,7 +101,11 @@ def get(key: str) -> None:
         if value is None:
             console.print(f"[dim]{key}: Not set[/dim]")
         else:
-            display_value = f"{str(value)[:8]}..." if key.endswith("_api_key") and len(str(value)) > 8 else str(value)
+            display_value = (
+                f"{str(value)[:8]}..."
+                if key.endswith("_api_key") and len(str(value)) > 8
+                else str(value)
+            )
             console.print(f"[cyan]{key}[/cyan]: [green]{display_value}[/green]")
     except ValueError as e:
         console.print(f"[red]Error: {e}[/red]")

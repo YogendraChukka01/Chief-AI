@@ -7,13 +7,12 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid7
 
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse
 from pydantic_ai.usage import RunUsage
 from pydantic_core import to_jsonable_python
-
 from rich.console import Console
-from uuid import uuid7
 
 from libchatinterface.costs import (
     SessionCosts,
@@ -59,6 +58,7 @@ class SessionManager:
         if self._encoding is None:
             try:
                 import tiktoken
+
                 self._encoding = tiktoken.encoding_for_model("gpt-4")
             except Exception:
                 # Fallback: create a simple estimator
@@ -74,6 +74,7 @@ class SessionManager:
     async def _extract_title(self, message: str) -> str:
         try:
             from libagentic.agents import get_title_agent
+
             title_agent = get_title_agent()
             result = await title_agent.run(f"Generate a title for this message: {message}")
             generated_title = result.output.strip()
@@ -195,7 +196,9 @@ class SessionManager:
         self._log_message_to_history(message_data)
         self._update_metadata()
 
-    def log_pydantic_messages(self, pydantic_messages: list[ModelMessage], skip_user_message: str | None = None) -> None:
+    def log_pydantic_messages(
+        self, pydantic_messages: list[ModelMessage], skip_user_message: str | None = None
+    ) -> None:
         for msg in pydantic_messages:
             timestamp = datetime.now(UTC).isoformat()
 
@@ -249,7 +252,9 @@ class SessionManager:
                             "pydantic_type": part.__class__.__name__,
                             "pydantic_data": to_jsonable_python(part),
                             "model_name": getattr(msg, "model_name", None),
-                            "usage": to_jsonable_python(getattr(msg, "usage", None)) if hasattr(msg, "usage") else None,
+                            "usage": to_jsonable_python(getattr(msg, "usage", None))
+                            if hasattr(msg, "usage")
+                            else None,
                         }
                     elif hasattr(part, "content"):
                         message_data = {
@@ -260,7 +265,9 @@ class SessionManager:
                             "pydantic_type": part.__class__.__name__,
                             "pydantic_data": to_jsonable_python(part),
                             "model_name": getattr(msg, "model_name", None),
-                            "usage": to_jsonable_python(getattr(msg, "usage", None)) if hasattr(msg, "usage") else None,
+                            "usage": to_jsonable_python(getattr(msg, "usage", None))
+                            if hasattr(msg, "usage")
+                            else None,
                         }
                     else:
                         continue
@@ -289,7 +296,10 @@ class SessionManager:
         return len(text) // 4
 
     def get_total_context_tokens(self) -> int:
-        if hasattr(self.session_costs, "total_usage") and self.session_costs.total_usage.total_tokens > 0:
+        if (
+            hasattr(self.session_costs, "total_usage")
+            and self.session_costs.total_usage.total_tokens > 0
+        ):
             return self.session_costs.total_usage.total_tokens
 
         total = 0
@@ -312,11 +322,14 @@ class SessionManager:
             return
 
         from rich.progress import Progress, SpinnerColumn, TextColumn
+
         from libagentic.agents import get_compression_agent
 
         recent_preserve_count = 3
         messages_to_compress = (
-            self.messages[:-recent_preserve_count] if len(self.messages) > recent_preserve_count else []
+            self.messages[:-recent_preserve_count]
+            if len(self.messages) > recent_preserve_count
+            else []
         )
 
         if not messages_to_compress:
@@ -332,7 +345,9 @@ class SessionManager:
             progress.add_task("", total=None)
             conversation_text = self._format_messages_for_compression(messages_to_compress)
             compression_agent = get_compression_agent()
-            result = await compression_agent.run(f"Compress this conversation:\n\n{conversation_text}")
+            result = await compression_agent.run(
+                f"Compress this conversation:\n\n{conversation_text}"
+            )
             self.compressed_context = result.output.strip()
             self.messages = self.messages[-recent_preserve_count:]
 
@@ -356,7 +371,9 @@ class SessionManager:
         compression_data = {
             "timestamp": timestamp,
             "type": "context_compression",
-            "content": f"Compressed {compressed_message_count} messages due to context window limit",
+            "content": (
+                f"Compressed {compressed_message_count} messages due to context window limit"
+            ),
             "message_index": self.message_count,
             "metadata": {
                 "compressed_messages": compressed_message_count,
@@ -374,7 +391,14 @@ class SessionManager:
 
     def get_pydantic_message_history(self) -> list:
         try:
-            from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart, ToolCallPart, ToolReturnPart
+            from pydantic_ai.messages import (
+                ModelRequest,
+                ModelResponse,
+                TextPart,
+                ToolCallPart,
+                ToolReturnPart,
+                UserPromptPart,
+            )
         except ImportError:
             return []
 
@@ -412,11 +436,10 @@ class SessionManager:
                             pydantic_messages.append(response)
                             current_response_parts = []
 
-                    elif pydantic_type in ["TextPart", "ToolCallPart"]:
-                        if current_request_parts:
-                            request = ModelRequest(parts=current_request_parts)
-                            pydantic_messages.append(request)
-                            current_request_parts = []
+                    elif pydantic_type in ["TextPart", "ToolCallPart"] and current_request_parts:
+                        request = ModelRequest(parts=current_request_parts)
+                        pydantic_messages.append(request)
+                        current_request_parts = []
 
                 except Exception:
                     continue
@@ -503,7 +526,9 @@ class SessionLister:
         except (ValueError, AttributeError):
             time_str = "Unknown time"
 
-        return f"{title:<50} ({time_str}, {message_count} message{'s' if message_count != 1 else ''})"
+        return (
+            f"{title:<50} ({time_str}, {message_count} message{'s' if message_count != 1 else ''})"
+        )
 
     def show_session_selection(self, console: Console) -> str | None:
         sessions = self.get_available_sessions()
@@ -522,7 +547,9 @@ class SessionLister:
             console.print(f"[bold cyan]{i}.[/bold cyan] {display_text}")
 
         console.print()
-        console.print(f"[dim]Enter session number (1-{len(sessions)}) or press Enter to cancel:[/dim]")
+        console.print(
+            f"[dim]Enter session number (1-{len(sessions)}) or press Enter to cancel:[/dim]"
+        )
 
         try:
             choice = console.input("[bold green]Select session: [/bold green]").strip()
@@ -556,7 +583,9 @@ class ResumableSessionManager(SessionManager):
         history_file = session_path / "history.jsonl"
 
         if not metadata_file.exists() or not history_file.exists():
-            raise ValueError(f"Invalid session directory (missing metadata or history): {session_dir}")
+            raise ValueError(
+                f"Invalid session directory (missing metadata or history): {session_dir}"
+            )
 
         instance = cls.__new__(cls)
 

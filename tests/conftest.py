@@ -1,6 +1,5 @@
 """Pytest configuration and fixtures for chief-ai tests."""
 
-import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -51,7 +50,5 @@ def sample_settings_dir(tmp_path: Path) -> Path:
 def sample_settings_file(sample_settings_dir: Path) -> Path:
     """Create a sample settings file."""
     settings_file = sample_settings_dir / "settings.json"
-    settings_file.write_text(
-        '{"context_window": 200000, "language": "English"}'
-    )
+    settings_file.write_text('{"context_window": 200000, "language": "English"}')
     return settings_file

@@ -14,7 +14,6 @@ from libagentic.keyring_store import (
     API_KEY_NAMES,
     clear_all_api_keys,
     get_all_api_keys,
-    get_api_key,
     store_all_api_keys,
 )
 from libagentic.logging import get_logger
@@ -151,7 +150,11 @@ class SettingsManager:
 
         # API Keys
         for key_name, display_name, url in [
-            ("anthropic_api_key", "Anthropic API key", "https://console.anthropic.com/settings/keys"),
+            (
+                "anthropic_api_key",
+                "Anthropic API key",
+                "https://console.anthropic.com/settings/keys",
+            ),
             ("openai_api_key", "OpenAI API key", "https://platform.openai.com/api-keys"),
             ("openrouter_api_key", "OpenRouter API key", "https://openrouter.ai/settings/keys"),
             ("tavily_api_key", "Tavily API key (web search)", "https://app.tavily.com/home"),
@@ -251,7 +254,9 @@ class SettingsManager:
             prompt_text += f" [dim]({url_hint})[/dim]"
 
         if default:
-            display_default = f"{str(default)[:8]}..." if mask_input and len(str(default)) > 8 else str(default)
+            display_default = (
+                f"{str(default)[:8]}..." if mask_input and len(str(default)) > 8 else str(default)
+            )
             prompt_text += f" [dim](default: {display_default})[/dim]"
 
         prompt_text += ": "
@@ -259,7 +264,9 @@ class SettingsManager:
         for attempt in range(MAX_RETRIES):
             try:
                 if mask_input:
-                    value = Prompt.ask(prompt_text, password=True, default=str(default) if default else "")
+                    value = Prompt.ask(
+                        prompt_text, password=True, default=str(default) if default else ""
+                    )
                 else:
                     value = Prompt.ask(prompt_text, default=str(default) if default else "")
 
@@ -287,7 +294,9 @@ class SettingsManager:
     def show_current_settings(self) -> None:
         """Display current settings in a formatted table."""
         if not self.settings_exist():
-            console.print("[yellow]No settings file found. Run chen to trigger onboarding.[/yellow]")
+            console.print(
+                "[yellow]No settings file found. Run chen to trigger onboarding.[/yellow]"
+            )
             return
 
         try:
@@ -336,7 +345,9 @@ class SettingsManager:
             ValueError: If key doesn't exist
         """
         if not self.settings_exist():
-            console.print("[yellow]No settings file found. Run chen to trigger onboarding.[/yellow]")
+            console.print(
+                "[yellow]No settings file found. Run chen to trigger onboarding.[/yellow]"
+            )
             return None
 
         valid_keys = list(ChenSettings.model_fields.keys())
@@ -404,9 +415,12 @@ class SettingsManager:
                 # Check gt constraint if present
                 metadata = field_info.metadata if hasattr(field_info, "metadata") else []
                 for constraint in metadata:
-                    if hasattr(constraint, "gt") and constraint.gt is not None:
-                        if converted <= constraint.gt:
-                            raise ValueError(f"Value must be greater than {constraint.gt}")
+                    if (
+                        hasattr(constraint, "gt")
+                        and constraint.gt is not None
+                        and converted <= constraint.gt
+                    ):
+                        raise ValueError(f"Value must be greater than {constraint.gt}")
                 return converted
             except ValueError as e:
                 raise ValueError(f"Invalid integer value '{value}' for {key}: {e}") from e

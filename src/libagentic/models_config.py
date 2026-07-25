@@ -117,10 +117,9 @@ def get_model_config(model_name: str) -> ModelConfig | None:
     best_match_len = 0
 
     for key, config in MODEL_REGISTRY.items():
-        if normalized in key or key in normalized:
-            if len(key) > best_match_len:
-                best_match = config
-                best_match_len = len(key)
+        if (normalized in key or key in normalized) and len(key) > best_match_len:
+            best_match = config
+            best_match_len = len(key)
 
     return best_match
 

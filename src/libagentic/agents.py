@@ -7,7 +7,11 @@ from pydantic_ai.mcp import MCPServer
 from typing_extensions import Doc
 
 from libagentic.logging import get_logger
-from libagentic.prompts import CHEN_SYSTEM_PROMPT, CHIEF_SYSTEM_PROMPT, TITLE_GENERATION_SYSTEM_PROMPT
+from libagentic.prompts import (
+    CHEN_SYSTEM_PROMPT,
+    CHIEF_SYSTEM_PROMPT,
+    TITLE_GENERATION_SYSTEM_PROMPT,
+)
 from libagentic.providers import get_default_model
 from libagentic.tools.search import web_search
 from libagentic.tools.time import current_datetime
@@ -16,7 +20,9 @@ logger = get_logger("agents")
 
 
 def get_chief_agent(
-    mcps: Annotated[list[MCPServer] | None, Doc("List of MCP servers to connect the agent to")] = None,
+    mcps: Annotated[
+        list[MCPServer] | None, Doc("List of MCP servers to connect the agent to")
+    ] = None,
     temperature: Annotated[float, Doc("Model temperature (lower = less creative)")] = 0.2,
 ) -> Agent:
     """Create the Chief agent - a barebones agent for custom development.
@@ -43,7 +49,9 @@ def get_chief_agent(
 
 
 def get_chen_agent(
-    mcps: Annotated[list[MCPServer] | None, Doc("List of MCP servers to connect the agent to")] = None,
+    mcps: Annotated[
+        list[MCPServer] | None, Doc("List of MCP servers to connect the agent to")
+    ] = None,
     temperature: Annotated[float, Doc("Model temperature (lower = less creative)")] = 0.2,
     language: Annotated[str, Doc("Language for the AI to use")] = "English",
 ) -> Agent:
@@ -112,7 +120,8 @@ def get_compression_agent() -> Agent:
     Returns:
         Configured context compression agent
     """
-    compression_prompt = """You are a context compression specialist. Compress conversation history while:
+    compression_prompt = """You are a context compression specialist.
+Compress conversation history while:
 
 PRIORITY 1: Preserve meaning over token reduction
 PRIORITY 2: Capture nuances and subtleties

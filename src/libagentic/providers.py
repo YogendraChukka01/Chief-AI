@@ -35,7 +35,9 @@ def get_openrouter_model(model_name: str = "deepseek/deepseek-chat-v3.1:free") -
     """
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
-        raise ValueError("OPENROUTER_API_KEY environment variable is required for OpenRouter models")
+        raise ValueError(
+            "OPENROUTER_API_KEY environment variable is required for OpenRouter models"
+        )
     provider = OpenAIProvider(base_url="https://openrouter.ai/api/v1", api_key=api_key)
     return OpenAIChatModel(model_name, provider=provider)
 

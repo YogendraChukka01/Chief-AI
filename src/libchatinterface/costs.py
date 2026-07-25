@@ -1,6 +1,5 @@
 """Cost tracking and calculation utilities for chat sessions."""
 
-import re
 from dataclasses import dataclass, field
 
 from pydantic_ai.usage import RunUsage
@@ -65,7 +64,7 @@ def normalize_model_name(model_name: str) -> str:
     # Strip common prefixes for lookup
     for prefix in ["anthropic/", "openai/", "google/", "deepseek/"]:
         if normalized.startswith(prefix):
-            normalized = normalized[len(prefix):]
+            normalized = normalized[len(prefix) :]
             break
 
     return normalized
@@ -157,6 +156,7 @@ def format_token_count(count: int) -> str:
 
 def format_session_costs_for_metadata(session_costs: SessionCosts) -> dict:
     """Format SessionCosts for inclusion in metadata.json."""
+
     def format_usage_costs(costs: UsageCosts) -> dict:
         result = {
             "input_tokens": costs.input_tokens,
@@ -174,7 +174,8 @@ def format_session_costs_for_metadata(session_costs: SessionCosts) -> dict:
 
     if session_costs.model_breakdown:
         result["models"] = {
-            model_name: format_usage_costs(costs) for model_name, costs in session_costs.model_breakdown.items()
+            model_name: format_usage_costs(costs)
+            for model_name, costs in session_costs.model_breakdown.items()
         }
 
     return result

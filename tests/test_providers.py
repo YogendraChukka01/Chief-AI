@@ -1,6 +1,5 @@
 """Tests for provider configurations."""
 
-import os
 from unittest.mock import patch
 
 import pytest
@@ -53,9 +52,11 @@ class TestDefaultModel:
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
         # Mock load_dotenv to prevent reading .env file
-        with patch("libagentic.providers.load_dotenv"):
-            with pytest.raises(ValueError, match="No API keys found"):
-                get_default_model()
+        with (
+            patch("libagentic.providers.load_dotenv"),
+            pytest.raises(ValueError, match="No API keys found"),
+        ):
+            get_default_model()
 
     def test_default_model_with_anthropic_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Should create fallback with Anthropic only."""
@@ -67,9 +68,7 @@ class TestDefaultModel:
             model = get_default_model(openai_model_name=None, openrouter_model_name=None)
             assert model is not None
 
-    def test_default_model_with_multiple_providers(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_default_model_with_multiple_providers(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Should create fallback with multiple providers."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
