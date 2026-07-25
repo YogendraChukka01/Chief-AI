@@ -50,7 +50,7 @@ def get_api_key(key_name: str) -> str | None:
 
     try:
         return keyring.get_password(SERVICE_NAME, key_name)
-    except keyring.errors.PasswordGetError as e:
+    except keyring.errors.PasswordGetError as e:  # type: ignore[attr-defined]
         logger.error("Failed to retrieve key '%s': %s", key_name, e)
         return None
     except Exception as e:

@@ -406,7 +406,7 @@ class SettingsManager:
         field_type = field_info.annotation
 
         if hasattr(field_type, "__args__"):
-            args = field_type.__args__
+            args = field_type.__args__  # type: ignore[union-attr]
             field_type = next((arg for arg in args if arg is not type(None)), str)
 
         if field_type is int:

@@ -74,7 +74,7 @@ class LogContext:
             kwargs: Key-value pairs to add to log records
         """
         self.extra = kwargs
-        self._old_factory: logging.LogRecordFactory | None = None
+        self._old_factory: logging.LogRecordFactory | None = None  # type: ignore[name-defined]
 
     def __enter__(self) -> "LogContext":
         """Save current factory and install enhanced factory."""

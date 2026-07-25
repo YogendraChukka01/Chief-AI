@@ -3,7 +3,7 @@
 from typing import Annotated
 
 from pydantic_ai import Agent, ModelSettings, Tool
-from pydantic_ai.mcp import MCPServer
+from pydantic_ai.mcp import MCPServer  # type: ignore[attr-defined]
 from typing_extensions import Doc
 
 from libagentic.logging import get_logger
@@ -39,7 +39,7 @@ def get_chief_agent(
 
     logger.info("Creating Chief agent with temperature %.2f", temperature)
 
-    return Agent(
+    return Agent(  # type: ignore[call-overload,no-any-return]
         model,
         name="Chief",
         system_prompt=CHIEF_SYSTEM_PROMPT,
@@ -72,7 +72,7 @@ def get_chen_agent(
 
     logger.info("Creating Chen agent with language=%s, temperature=%.2f", language, temperature)
 
-    return Agent(
+    return Agent(  # type: ignore[call-overload,no-any-return]
         model,
         name="Chen",
         system_prompt=CHEN_SYSTEM_PROMPT.format(language=language),
@@ -106,7 +106,7 @@ def get_title_agent(
 
     logger.info("Creating title agent")
 
-    return Agent(
+    return Agent(  # type: ignore[no-any-return]
         title_model,
         name="TitleGenerator",
         system_prompt=TITLE_GENERATION_SYSTEM_PROMPT,
@@ -138,7 +138,7 @@ Output a flowing narrative that preserves:
 
     logger.info("Creating compression agent")
 
-    return Agent(
+    return Agent(  # type: ignore[no-any-return]
         model,
         name="ContextCompressor",
         system_prompt=compression_prompt,

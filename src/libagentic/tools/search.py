@@ -31,7 +31,7 @@ async def web_search(
     Returns:
         Dictionary containing search results
     """
-    return await asyncify(ctx.deps.tavily_client.search)(
+    return await asyncify(ctx.deps.tavily_client.search)(  # type: ignore[no-any-return]
         query=query,
         search_depth=search_depth,
         topic=topic,

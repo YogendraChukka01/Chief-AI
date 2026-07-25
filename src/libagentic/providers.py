@@ -98,11 +98,11 @@ def get_default_model(
         provider_names.append("Anthropic")
 
     if openai_api_key and openai_model_name:
-        available_providers.append(get_openai_model(openai_model_name))
+        available_providers.append(get_openai_model(openai_model_name))  # type: ignore[arg-type]
         provider_names.append("OpenAI")
 
     if openrouter_api_key and openrouter_model_name:
-        available_providers.append(get_openrouter_model(openrouter_model_name))
+        available_providers.append(get_openrouter_model(openrouter_model_name))  # type: ignore[arg-type]
         provider_names.append("OpenRouter")
 
     if not available_providers:
