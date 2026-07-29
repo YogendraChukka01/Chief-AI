@@ -93,6 +93,12 @@ def calculate_usage_cost(usage: RunUsage, model_name: str | None = None) -> Usag
         normalized_name = normalize_model_name(model_name)
         model_costs = MODEL_PRICING.get(normalized_name)
 
+        if not model_costs:
+            for pricing_key, pricing in MODEL_PRICING.items():
+                if normalized_name == pricing_key.lower():
+                    model_costs = pricing
+                    break
+
         if model_costs:
             non_cached_input = max(0, costs.input_tokens - costs.cached_tokens)
             input_cost = (non_cached_input / 1000.0) * model_costs.input_cost_per_1k

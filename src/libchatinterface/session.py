@@ -1,6 +1,5 @@
 """Session management for chat interface with complete message history tracking."""
 
-import asyncio
 import contextlib
 import json
 import os
@@ -46,7 +45,6 @@ class SessionManager:
         self._title_generated = False
 
         self.session_costs = SessionCosts()
-        self._costs_lock = asyncio.Lock()
         self.context_window = context_window
         self.compressed_context: str | None = None
 
@@ -85,7 +83,7 @@ class SessionManager:
                 title_usage = result.usage()
                 title_model = getattr(result, "model_name", None)
                 if title_usage:
-                    await self.log_run_usage(title_usage, title_model)
+                    self.log_run_usage(title_usage, title_model)
             except Exception:
                 pass
 
@@ -148,11 +146,10 @@ class SessionManager:
             fallback_title = self._extract_title_fallback(self.first_user_message)
             self._update_metadata(title=fallback_title)
 
-    async def log_run_usage(self, usage: RunUsage, model_name: str | None = None) -> None:
-        async with self._costs_lock:
-            usage_costs = calculate_usage_cost(usage, model_name)
-            add_usage_to_session(self.session_costs, usage_costs)
-            self._update_metadata()
+    def log_run_usage(self, usage: RunUsage, model_name: str | None = None) -> None:
+        usage_costs = calculate_usage_cost(usage, model_name)
+        add_usage_to_session(self.session_costs, usage_costs)
+        self._update_metadata()
 
     def log_system_prompt(self, system_prompt: str) -> None:
         timestamp = datetime.now(UTC).isoformat()
@@ -653,7 +650,6 @@ class ResumableSessionManager(SessionManager):
                             requests=requests,
                             cache_read_tokens=cache_read_tokens,
                         )
-                        restored_usage.estimated = True  # reconstructed from metadata, not live-tracked
                         usage_costs = calculate_usage_cost(restored_usage, None)
                         add_usage_to_session(instance.session_costs, usage_costs)
 

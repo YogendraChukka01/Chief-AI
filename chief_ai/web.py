@@ -11,7 +11,6 @@ Only the Python standard library is used, so there are no extra dependencies.
 from __future__ import annotations
 
 import json
-import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Optional
 from urllib.parse import parse_qs, urlparse
@@ -147,7 +146,6 @@ INDEX_HTML = """<!doctype html>
 
 class _Handler(BaseHTTPRequestHandler):
     chief: ChiefAI
-    _chief_lock = threading.Lock()
 
     def _send(self, code: int, body: bytes, content_type: str) -> None:
         self.send_response(code)
@@ -172,8 +170,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _handle_plan(self, qs: dict) -> None:
         goal = (qs.get("goal") or [""])[0]
-        with type(self)._chief_lock:
-            plan = self.chief.plan(goal)
+        plan = self.chief.plan(goal)
         payload = json.dumps(
             {
                 "goal": plan.goal,
@@ -199,13 +196,9 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
-        with type(self)._chief_lock:
-            for event in self.chief.stream(goal, parallel=parallel):
-                try:
-                    self.wfile.write(f"data: {json.dumps(event)}\n\n".encode("utf-8"))
-                    self.wfile.flush()
-                except (OSError, BrokenPipeError):
-                    break
+        for event in self.chief.stream(goal, parallel=parallel):
+            self.wfile.write(f"data: {json.dumps(event)}\n\n".encode("utf-8"))
+            self.wfile.flush()
 
     def log_message(self, *args) -> None:  # silence default logging
         pass
@@ -224,13 +217,10 @@ def _agent_name(sub_id: Optional[str]) -> str:
 
 def make_server(host: str = "127.0.0.1", port: int = 8000, use_opencode: bool = False) -> ThreadingHTTPServer:
     executor = OpencodeRunner() if use_opencode else None
-    # Each request handler gets its own ChiefAI instance to avoid shared
-    # mutable state across threads in ThreadingHTTPServer.
-    def _make_chief() -> ChiefAI:
-        return ChiefAI(memory=MemoryAI(), executor=executor)  # type: ignore[misc]
+    chief = ChiefAI(memory=MemoryAI(), executor=executor)
 
     class Handler(_Handler):
         pass
 
-    Handler.chief = _make_chief()
+    Handler.chief = chief
     return ThreadingHTTPServer((host, port), Handler)

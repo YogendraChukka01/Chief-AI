@@ -16,6 +16,16 @@ class Permission(str, Enum):
     NETWORK = "network"
 
 
+# Tools the Python orchestrator is aware of. These map onto opencode
+# permissions when the registry is compiled into .opencode/ agent files.
+TOOL_PERMISSION: dict[str, Permission] = {
+    "read": Permission.READ,
+    "write": Permission.WRITE,
+    "bash": Permission.EXECUTE,
+    "web": Permission.NETWORK,
+}
+
+
 @dataclass
 class SubAgent:
     """A single specialist agent belonging to a department."""

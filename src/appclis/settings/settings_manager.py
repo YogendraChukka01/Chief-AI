@@ -14,7 +14,6 @@ from libagentic.keyring_store import (
     API_KEY_NAMES,
     clear_all_api_keys,
     get_all_api_keys,
-    get_api_key,
     store_all_api_keys,
 )
 from libagentic.logging import get_logger
@@ -54,7 +53,7 @@ class SettingsManager:
             ChenSettings: The loaded or newly created settings
         """
         if not self.settings_exist():
-            return self.run_onboarding()
+            return self._run_onboarding()
 
         try:
             with self.settings_file.open(encoding="utf-8") as f:
@@ -72,21 +71,19 @@ class SettingsManager:
             logger.error("Invalid JSON in settings file: %s", e)
             console.print(f"[red]Error loading settings: {e}[/red]")
             console.print("[yellow]Running onboarding to recreate settings...[/yellow]")
-            return self.run_onboarding()
+            return self._run_onboarding()
 
         except ValueError as e:
             # Pydantic validation error (e.g., missing API keys)
             logger.warning("Settings validation failed: %s", e)
             console.print(f"[yellow]Settings validation: {e}[/yellow]")
             console.print("[yellow]Running onboarding...[/yellow]")
-            return self.run_onboarding()
+            return self._run_onboarding()
 
-        except KeyboardInterrupt:
-            raise
         except Exception as e:
             logger.exception("Unexpected error loading settings")
             console.print(f"[red]Error loading settings: {e}[/red]")
-            return self.run_onboarding()
+            return self._run_onboarding()
 
     def save_settings(self, settings: ChenSettings) -> None:
         """Save settings to JSON file and keychain for secrets.
@@ -123,7 +120,7 @@ class SettingsManager:
         if secrets:
             console.print("[dim]Secrets stored securely in OS keychain[/dim]")
 
-    def run_onboarding(self) -> ChenSettings:
+    def _run_onboarding(self) -> ChenSettings:
         """Run the interactive onboarding process to collect settings.
 
         Returns:
@@ -153,7 +150,11 @@ class SettingsManager:
 
         # API Keys
         for key_name, display_name, url in [
-            ("anthropic_api_key", "Anthropic API key", "https://console.anthropic.com/settings/keys"),
+            (
+                "anthropic_api_key",
+                "Anthropic API key",
+                "https://console.anthropic.com/settings/keys",
+            ),
             ("openai_api_key", "OpenAI API key", "https://platform.openai.com/api-keys"),
             ("openrouter_api_key", "OpenRouter API key", "https://openrouter.ai/settings/keys"),
             ("tavily_api_key", "Tavily API key (web search)", "https://app.tavily.com/home"),
@@ -198,8 +199,6 @@ class SettingsManager:
 
             return settings
 
-        except KeyboardInterrupt:
-            raise
         except Exception as e:
             logger.exception("Configuration validation failed")
             console.print(f"\n[red]Configuration failed: {e}[/red]")
@@ -255,10 +254,9 @@ class SettingsManager:
             prompt_text += f" [dim]({url_hint})[/dim]"
 
         if default:
-            if mask_input:
-                display_default = "********"
-            else:
-                display_default = str(default)
+            display_default = (
+                f"{str(default)[:8]}..." if mask_input and len(str(default)) > 8 else str(default)
+            )
             prompt_text += f" [dim](default: {display_default})[/dim]"
 
         prompt_text += ": "
@@ -266,7 +264,9 @@ class SettingsManager:
         for attempt in range(MAX_RETRIES):
             try:
                 if mask_input:
-                    value = Prompt.ask(prompt_text, password=True, default=str(default) if default else "")
+                    value = Prompt.ask(
+                        prompt_text, password=True, default=str(default) if default else ""
+                    )
                 else:
                     value = Prompt.ask(prompt_text, default=str(default) if default else "")
 
@@ -294,7 +294,9 @@ class SettingsManager:
     def show_current_settings(self) -> None:
         """Display current settings in a formatted table."""
         if not self.settings_exist():
-            console.print("[yellow]No settings file found. Run chen to trigger onboarding.[/yellow]")
+            console.print(
+                "[yellow]No settings file found. Run chen to trigger onboarding.[/yellow]"
+            )
             return
 
         try:
@@ -326,8 +328,6 @@ class SettingsManager:
             console.print(table)
             console.print()
 
-        except KeyboardInterrupt:
-            raise
         except Exception as e:
             logger.exception("Error reading settings")
             console.print(f"[red]Error reading settings: {e}[/red]")
@@ -345,7 +345,9 @@ class SettingsManager:
             ValueError: If key doesn't exist
         """
         if not self.settings_exist():
-            console.print("[yellow]No settings file found. Run chen to trigger onboarding.[/yellow]")
+            console.print(
+                "[yellow]No settings file found. Run chen to trigger onboarding.[/yellow]"
+            )
             return None
 
         valid_keys = list(ChenSettings.model_fields.keys())
@@ -383,8 +385,6 @@ class SettingsManager:
             updated_settings = ChenSettings.model_validate(settings_dict)
             self.save_settings(updated_settings)
             console.print(f"[green]Setting '{key}' updated successfully[/green]")
-        except KeyboardInterrupt:
-            raise
         except Exception as e:
             raise ValueError(f"Failed to update setting: {e}") from e
 
@@ -406,7 +406,7 @@ class SettingsManager:
         field_type = field_info.annotation
 
         if hasattr(field_type, "__args__"):
-            args = field_type.__args__
+            args = field_type.__args__  # type: ignore[union-attr]
             field_type = next((arg for arg in args if arg is not type(None)), str)
 
         if field_type is int:
@@ -415,9 +415,12 @@ class SettingsManager:
                 # Check gt constraint if present
                 metadata = field_info.metadata if hasattr(field_info, "metadata") else []
                 for constraint in metadata:
-                    if hasattr(constraint, "gt") and constraint.gt is not None:
-                        if converted <= constraint.gt:
-                            raise ValueError(f"Value must be greater than {constraint.gt}")
+                    if (
+                        hasattr(constraint, "gt")
+                        and constraint.gt is not None
+                        and converted <= constraint.gt
+                    ):
+                        raise ValueError(f"Value must be greater than {constraint.gt}")
                 return converted
             except ValueError as e:
                 raise ValueError(f"Invalid integer value '{value}' for {key}: {e}") from e
@@ -454,8 +457,6 @@ class SettingsManager:
             console.print("Run chen again to trigger onboarding.")
             return True
 
-        except KeyboardInterrupt:
-            raise
         except Exception as e:
             logger.exception("Error resetting settings")
             console.print(f"[red]Error resetting settings: {e}[/red]")
