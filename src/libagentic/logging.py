@@ -2,7 +2,20 @@
 
 import logging
 import sys
+from contextvars import ContextVar
 from typing import Any
+
+# Context variable for extra log fields — safe for async code.
+_log_context: ContextVar[dict[str, Any]] = ContextVar("_log_context", default={})
+
+
+class LogContextFilter(logging.Filter):
+    """Add contextvar fields to every log record."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        for key, value in _log_context.get().items():
+            setattr(record, key, value)
+        return True
 
 
 def setup_logger(
@@ -43,6 +56,12 @@ def setup_logger(
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
 
+    # Attach LogContextFilter so contextvar fields appear on every record.
+    # Add to the root logger so all children inherit it.
+    root = logging.getLogger()
+    if not any(isinstance(f, LogContextFilter) for f in root.filters):
+        root.addFilter(LogContextFilter())
+
     return logger
 
 
@@ -63,8 +82,8 @@ def get_logger(name: str | None = None) -> logging.Logger:
 class LogContext:
     """Context manager for structured logging with extra context.
 
-    Note: This modifies the global log record factory. Use with caution
-    in async code where multiple contexts may overlap.
+    Uses ``contextvars`` so that async code with overlapping contexts
+    does not leak fields between coroutines.
     """
 
     def __init__(self, **kwargs: Any) -> None:
@@ -74,25 +93,16 @@ class LogContext:
             kwargs: Key-value pairs to add to log records
         """
         self.extra = kwargs
-        self._old_factory: logging.LogRecordFactory | None = None  # type: ignore[name-defined]
+        self._token: Any = None
 
     def __enter__(self) -> "LogContext":
-        """Save current factory and install enhanced factory."""
-        self._old_factory = logging.getLogRecordFactory()
-
-        old_factory = self._old_factory
-        extra = self.extra
-
-        def record_factory(*args: Any, **kw: Any) -> logging.LogRecord:
-            record = old_factory(*args, **kw)
-            for key, value in extra.items():
-                setattr(record, key, value)
-            return record
-
-        logging.setLogRecordFactory(record_factory)
+        """Merge extra fields into the current contextvar."""
+        old = _log_context.get()
+        merged = {**old, **self.extra}
+        self._token = _log_context.set(merged)
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Restore the original log record factory."""
-        if self._old_factory is not None:
-            logging.setLogRecordFactory(self._old_factory)
+        """Restore the previous contextvar value."""
+        if self._token is not None:
+            _log_context.reset(self._token)

@@ -8,9 +8,7 @@ delegates real work to the specialists via opencode's Task tool / @mentions.
 
 from __future__ import annotations
 
-import json
 import os
-from typing import Optional
 
 import yaml
 
@@ -77,14 +75,6 @@ never by impersonating them. When tasks depend on each other, sequence them.
     return _frontmatter(block) + "\n" + prompt + "\n"
 
 
-def render_opencode_json() -> str:
-    block = {
-        "$schema": "https://opencode.ai/config.json",
-        "agent": {"chief": {"mode": "primary"}},
-    }
-    return json.dumps(block, indent=2)
-
-
 def _write_opencode_json(target_dir: str) -> str:
     """Write opencode.json, merging the chief entry into any existing config.
 
@@ -98,9 +88,6 @@ def _write_opencode_json(target_dir: str) -> str:
     if os.path.exists(path):
         try:
             with open(path, encoding="utf-8") as fh:
-                # Use yaml.safe_load (not json.load) because the file may be
-                # YAML format — yaml.safe_load handles both YAML and JSON,
-                # whereas json.load breaks on valid YAML output.
                 existing = yaml.safe_load(fh) or {}
             if isinstance(existing, dict):
                 existing.setdefault("$schema", data["$schema"])
@@ -110,7 +97,7 @@ def _write_opencode_json(target_dir: str) -> str:
         except (OSError, yaml.YAMLError):
             pass
     with open(path, "w", encoding="utf-8") as fh:
-        fh.write(json.dumps(data, indent=2))
+        fh.write(yaml.safe_dump(data, default_flow_style=False, sort_keys=False))
     return path
 
 

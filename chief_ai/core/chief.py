@@ -14,10 +14,13 @@ tasks can be executed in parallel with dependency-aware scheduling.
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Iterator, Optional
+
+logger = logging.getLogger(__name__)
 
 from .memory import MemoryAI
 from .registry import get_department, get_sub_agent
@@ -33,8 +36,12 @@ class Plan:
     def render(self) -> str:
         lines = [f"# Chief AI Plan", "", f"Goal: {self.goal}", "", "## Tasks", ""]
         for t in self.tasks:
-            dept = get_department(t.department).name if t.department else "?"
-            agent = get_sub_agent(t.sub_agent).name if t.sub_agent else "?"
+            try:
+                dept = get_department(t.department).name if t.department else "?"
+                agent = get_sub_agent(t.sub_agent).name if t.sub_agent else "?"
+            except KeyError:
+                dept = t.department or "?"
+                agent = t.sub_agent or "?"
             dep = f"  (depends on: {', '.join(t.dependencies)})" if t.dependencies else ""
             lines.append(f"{t.id}. [{dept}] → {agent}{dep}")
         return "\n".join(lines)
@@ -116,6 +123,7 @@ class ChiefAI:
             ]
             if not ready:
                 # No task is ready but work remains -> break cycles defensively.
+                logger.warning("Cycle-breaker triggered: no ready tasks but %d remain pending", len(pending))
                 ready = list(pending.values())
 
             with ThreadPoolExecutor(max_workers=min(len(ready), 8)) as ex:

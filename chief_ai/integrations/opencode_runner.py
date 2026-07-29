@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from typing import Optional
 
 from ..core.chief import Executor
 from ..core.registry import get_sub_agent
@@ -36,8 +35,11 @@ class OpencodeRunner(Executor):
             [self.binary, "run", message],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=self.timeout,
         )
         if proc.returncode != 0:
-            return f"[{agent.name}] execution failed (exit {proc.returncode}):\n{proc.stderr}"
+            raise RuntimeError(
+                f"[{agent.name}] execution failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
         return proc.stdout.strip() or f"[{agent.name}] returned no output."

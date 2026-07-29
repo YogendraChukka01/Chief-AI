@@ -8,8 +8,6 @@ sub-agent for an arbitrary piece of text.
 from __future__ import annotations
 
 import re
-from typing import Optional
-
 from .registry import DEPARTMENTS, get_sub_agent, list_sub_agents
 from .types import SubAgent, Task
 
@@ -21,9 +19,11 @@ def _tokens(text: str) -> set[str]:
 
 
 def _tag_hits(sub: SubAgent, text: str) -> int:
-    """Count how many of a sub-agent's tags appear as substrings in text."""
+    """Count how many of a sub-agent's tags appear as whole words in text."""
     lowered = text.lower()
-    return sum(1 for tag in sub.tags if tag in lowered)
+    return sum(
+        1 for tag in sub.tags if re.search(rf"\b{re.escape(tag)}\b", lowered)
+    )
 
 
 def _description_overlap(sub: SubAgent, tokens: set[str]) -> float:

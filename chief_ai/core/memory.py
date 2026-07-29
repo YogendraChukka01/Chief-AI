@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -38,61 +39,69 @@ class _MemoryState:
 class MemoryAI:
     def __init__(self, path: str = ".chief_memory/memory.json") -> None:
         self.path = path
+        self._lock = threading.RLock()
         self._state = _MemoryState()
         self.load()
 
     # -- persistence -------------------------------------------------------
     def load(self) -> None:
-        if not os.path.exists(self.path):
-            return
-        try:
-            with open(self.path, "r", encoding="utf-8") as fh:
-                raw = json.load(fh)
-        except (json.JSONDecodeError, OSError):
-            return
-        self._state.facts = raw.get("facts", {})
-        self._state.history = raw.get("history", [])
-        self._state.nodes = {
-            k: _GraphNode(**v) for k, v in raw.get("nodes", {}).items()
-        }
-        self._state.edges = [_GraphEdge(**e) for e in raw.get("edges", [])]
+        with self._lock:
+            if not os.path.exists(self.path):
+                return
+            try:
+                with open(self.path, "r", encoding="utf-8") as fh:
+                    raw = json.load(fh)
+            except (json.JSONDecodeError, OSError):
+                return
+            self._state.facts = raw.get("facts", {})
+            self._state.history = raw.get("history", [])
+            self._state.nodes = {
+                k: _GraphNode(**v) for k, v in raw.get("nodes", {}).items()
+            }
+            self._state.edges = [_GraphEdge(**e) for e in raw.get("edges", [])]
 
     def save(self) -> None:
-        os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
-        raw = {
-            "facts": self._state.facts,
-            "history": self._state.history,
-            "nodes": {k: vars(v) for k, v in self._state.nodes.items()},
-            "edges": [vars(e) for e in self._state.edges],
-        }
-        with open(self.path, "w", encoding="utf-8") as fh:
-            json.dump(raw, fh, indent=2)
+        with self._lock:
+            os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
+            raw = {
+                "facts": self._state.facts,
+                "history": self._state.history,
+                "nodes": {k: vars(v) for k, v in self._state.nodes.items()},
+                "edges": [vars(e) for e in self._state.edges],
+            }
+            with open(self.path, "w", encoding="utf-8") as fh:
+                json.dump(raw, fh, indent=2)
 
     # -- long-term memory --------------------------------------------------
     def remember(self, key: str, value: str) -> None:
-        self._state.facts[key] = value
-        self._state.history.append({"type": "fact", "key": key})
-        self.save()
+        with self._lock:
+            self._state.facts[key] = value
+            self._state.history.append({"type": "fact", "key": key})
+            self.save()
 
     def recall(self, key: str) -> Optional[str]:
         return self._state.facts.get(key)
 
     # -- history -----------------------------------------------------------
     def log_event(self, event: str, detail: Optional[str] = None) -> None:
-        self._state.history.append({"event": event, "detail": detail})
-        self.save()
+        with self._lock:
+            self._state.history.append({"event": event, "detail": detail})
+            self.save()
 
     def history(self) -> list[dict]:
-        return list(self._state.history)
+        with self._lock:
+            return list(self._state.history)
 
     # -- knowledge graph ---------------------------------------------------
     def add_node(self, node_id: str, kind: str, label: str) -> None:
-        self._state.nodes[node_id] = _GraphNode(node_id, kind, label)
-        self.save()
+        with self._lock:
+            self._state.nodes[node_id] = _GraphNode(node_id, kind, label)
+            self.save()
 
     def link(self, src: str, dst: str, relation: str) -> None:
-        self._state.edges.append(_GraphEdge(src, dst, relation))
-        self.save()
+        with self._lock:
+            self._state.edges.append(_GraphEdge(src, dst, relation))
+            self.save()
 
     def graph(self) -> dict:
         return {

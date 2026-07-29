@@ -18,10 +18,10 @@ class CapturingExecutor(Executor):
         return f"[{get_sub_agent(sub_agent_id).name}] done"
 
 
-def test_memory_context_injected_into_prompt():
+def test_memory_context_injected_into_prompt(tmp_path):
     from chief_ai.core.memory import MemoryAI
 
-    mem = MemoryAI(path=".chief_memory/_test_memory.json")
+    mem = MemoryAI(path=str(tmp_path / "test_memory.json"))
     mem.remember("portfolio", "v1 was built with React and Tailwind")
     chief = ChiefAI(memory=mem, executor=CapturingExecutor())
     plan = chief.plan("Build the next version of my portfolio")
