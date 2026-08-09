@@ -1,8 +1,52 @@
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=flat"/>
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat"/>
+  <img src="https://img.shields.io/badge/pydantic--ai-333?style=flat"/>
+  <img src="https://img.shields.io/badge/opencode-native-black?style=flat"/>
+</p>
+
 # Chief-AI
 
 > A single **Chief AI** that orchestrates a team of **specialized sub-agents** — built as a Python framework that compiles into native [opencode](https://opencode.ai) agents.
 
 Chief-AI is a multi-agent operating system for software projects. You interact with exactly one agent — the **Chief** — which understands your goal, decomposes it into tasks, delegates each task to the most qualified specialist, and returns a single, coherent result. Every specialist runs as a real **opencode sub-agent**, so there are no external LLM keys to manage from Python.
+
+## Project Snapshot
+
+```
+┌──────────────────────────────────────────────────────┐
+│ 🏗️ Chief-AI                                          │
+│                                                      │
+│ Multi-agent orchestrator for software projects       │
+│                                                      │
+│ AI        Backend      DevOps       QA              │
+│ Python    pydantic-ai  Testing      pytest           │
+│ 11 Depts  opencode     SSE Stream   Registry         │
+│ 55 Agents Web UI       Memory AI    MockExecutor     │
+│                                                      │
+│ Status: Active  License: MIT                          │
+└──────────────────────────────────────────────────────┘
+```
+
+## How It Works
+
+```
+Goal → decompose() → Ordered Task List
+                       ↓
+                     Router (tags + intent matching)
+                       ↓
+     Department-sorted dispatch → ThreadPoolExecutor
+                       ↓
+         OpencodeRunner (real sub-agents) or MockExecutor
+                       ↓
+          MemoryAI context injected per task
+                       ↓
+                 Synthesize → coherent result
+```
+
+---
+
+## The Org Chart
 
 ```
         ┌─────────────────────────────────────────┐
@@ -51,6 +95,45 @@ Chief-AI is a multi-agent operating system for software projects. You interact w
 - **Persistent memory** — long-term facts, a knowledge graph, project history, and keyword context retrieval.
 - **Reproducible artifacts** — `chief generate` emits every `.opencode/agents/*.md` and `opencode.json` from the registry.
 - **Tested** — registry, router, and generator covered by `pytest`.
+
+---
+
+## Tech Stack
+
+### Core
+Python 3.10+ · pydantic-ai · argparse · ThreadPoolExecutor · Standard library (HTTP server for web UI)
+
+### AI / Agent Runtime
+opencode (native sub-agents) · LLM providers (via opencode)
+
+### Orchestration
+Registry-driven routing · Deterministic task decomposition · Dependency-aware parallel scheduling · SSE streaming for web UI
+
+### Memory
+Persistent facts · Knowledge graph · Project history · Keyword-based context retrieval
+
+### Engineering
+Git · pytest · Mermaid (diagram rendering) · Python packaging (setuptools)
+
+---
+
+## Engineering Decisions
+
+### Why Python?
+The orchestration logic (decomposition, routing, scheduling, synthesis) is deterministic and fast — it doesn't need an LLM. Python's data classes, type hints, and `ThreadPoolExecutor` make the registry and router clean and testable without pulling in a heavy framework.
+
+### Why opencode as the execution backend?
+Each specialist is generated as a native opencode sub-agent (`.md` file + `opencode.json`). This means:
+- No custom runtime to maintain
+- Real LLM execution via opencode's infrastructure
+- Automatic permission scoping per agent
+- The Python registry is the only source of truth
+
+### Why a registry-driven approach?
+All 55 agents are defined as data in `registry.py`. This makes the system inspectable (`chief list`), testable (`test_registry.py`), and reproducible (`chief generate` rebuilds all opencode files from the registry).
+
+### Why MockExecutor?
+Allows instant, deterministic previews of execution plans without making LLM calls. Perfect for testing the orchestration logic and for live UI demos.
 
 ---
 
@@ -237,3 +320,19 @@ This project is licensed under the MIT License — see the `LICENSE` file for de
 ## Acknowledgements
 
 Built on top of [opencode](https://opencode.ai) multi-agent subagents.
+
+---
+
+<h3 align="center">
+
+```
+Built by Yogi
+
+  Build.  Learn.  Ship.  Iterate.
+```
+
+</h3>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/—%20AI%20×%20Software%20×%20Product%20×%20Open%20Source-0d1117?style=for-the-badge&labelColor=0d1117&color=7c3aed"/>
+</p>
