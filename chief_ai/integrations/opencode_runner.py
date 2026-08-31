@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from typing import Optional
 
 from ..core.chief import Executor
 from ..core.registry import get_sub_agent

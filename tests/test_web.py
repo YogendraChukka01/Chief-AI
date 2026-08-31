@@ -9,12 +9,12 @@ from chief_ai.web import make_server
 GOAL = "Build the next version of my portfolio"
 
 
-def _event_types(goal, parallel):
+def _event_types(goal: str, parallel: bool) -> list[str]:
     chief = ChiefAI(executor=MockExecutor())
     return [e["type"] for e in chief.stream(goal, parallel=parallel)]
 
 
-def test_stream_sequential_event_sequence():
+def test_stream_sequential_event_sequence() -> None:
     types = _event_types(GOAL, parallel=False)
     assert types[0] == "plan"
     assert types[-1] == "done"
@@ -23,7 +23,7 @@ def test_stream_sequential_event_sequence():
     assert types.count("task_start") >= 5
 
 
-def test_stream_parallel_yields_same_final_result():
+def test_stream_parallel_yields_same_final_result() -> None:
     sequential = ChiefAI(executor=MockExecutor()).execute(GOAL, parallel=False)
     parallel = ChiefAI(executor=MockExecutor()).execute(GOAL, parallel=True)
     # Both must contain the same set of specialist sections.
@@ -31,7 +31,7 @@ def test_stream_parallel_yields_same_final_result():
         assert name in sequential and name in parallel
 
 
-def test_web_plan_and_index_endpoints():
+def test_web_plan_and_index_endpoints() -> None:
     server = make_server(host="127.0.0.1", port=0)
     port = server.server_address[1]
     t = threading.Thread(target=server.serve_forever, daemon=True)
@@ -52,7 +52,7 @@ def test_web_plan_and_index_endpoints():
         t.join(timeout=2)
 
 
-def test_web_run_sse_streams_events():
+def test_web_run_sse_streams_events() -> None:
     server = make_server(host="127.0.0.1", port=0)
     port = server.server_address[1]
     t = threading.Thread(target=server.serve_forever, daemon=True)

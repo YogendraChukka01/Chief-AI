@@ -1,6 +1,7 @@
 """Cost tracking and calculation utilities for chat sessions."""
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from pydantic_ai.usage import RunUsage
 
@@ -157,8 +158,8 @@ def format_token_count(count: int) -> str:
 def format_session_costs_for_metadata(session_costs: SessionCosts) -> dict:
     """Format SessionCosts for inclusion in metadata.json."""
 
-    def format_usage_costs(costs: UsageCosts) -> dict:
-        result = {
+    def format_usage_costs(costs: UsageCosts) -> dict[str, Any]:
+        result: dict[str, Any] = {
             "input_tokens": costs.input_tokens,
             "output_tokens": costs.output_tokens,
             "total_tokens": costs.total_tokens,

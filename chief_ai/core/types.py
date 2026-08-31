@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 
 
-class Permission(str, Enum):
+class Permission(StrEnum):
     """Filesystem / runtime permission tiers used for opencode agent generation."""
 
     READ = "read"
@@ -37,7 +36,7 @@ class SubAgent:
     tags: list[str] = field(default_factory=list)
     tools: list[str] = field(default_factory=list)
     permissions: dict[Permission, bool] = field(default_factory=dict)
-    model: Optional[str] = None
+    model: str | None = None
     prompt: str = ""
 
     def permission_map(self) -> dict[str, bool]:
@@ -61,8 +60,8 @@ class Task:
 
     id: str
     description: str
-    department: Optional[str] = None
-    sub_agent: Optional[str] = None
+    department: str | None = None
+    sub_agent: str | None = None
     dependencies: list[str] = field(default_factory=list)
 
 

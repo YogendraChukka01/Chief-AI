@@ -15,9 +15,9 @@ tasks can be executed in parallel with dependency-aware scheduling.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Iterator, Optional
 
 from .memory import MemoryAI
 from .registry import get_department, get_sub_agent
@@ -31,7 +31,7 @@ class Plan:
     tasks: list[Task]
 
     def render(self) -> str:
-        lines = [f"# Chief AI Plan", "", f"Goal: {self.goal}", "", "## Tasks", ""]
+        lines = ["# Chief AI Plan", "", f"Goal: {self.goal}", "", "## Tasks", ""]
         for t in self.tasks:
             dept = get_department(t.department).name if t.department else "?"
             agent = get_sub_agent(t.sub_agent).name if t.sub_agent else "?"
@@ -65,7 +65,7 @@ class MockExecutor(Executor):
 
 
 class ChiefAI:
-    def __init__(self, memory: Optional[MemoryAI] = None, executor: Optional[Executor] = None) -> None:
+    def __init__(self, memory: MemoryAI | None = None, executor: Executor | None = None) -> None:
         self.memory = memory or MemoryAI()
         self.executor = executor or MockExecutor()
 
@@ -103,7 +103,6 @@ class ChiefAI:
     # -- scheduling --------------------------------------------------------
     def _schedule(self, plan: Plan) -> list[Result]:
         """Execute tasks respecting dependencies; independent tasks run in parallel."""
-        by_id = {t.id: t for t in plan.tasks}
         pending = {t.id: t for t in plan.tasks}
         done: set[str] = set()
         results: dict[str, Result] = {}
@@ -124,6 +123,8 @@ class ChiefAI:
                     res = fut.result()
                     results[res.task_id] = res
                     done.add(res.task_id)
+                    if res.sub_agent:
+                        done.add(res.sub_agent)
                     pending.pop(res.task_id, None)
 
         # Return in original plan order for a stable, readable synthesis.
@@ -132,7 +133,7 @@ class ChiefAI:
     # -- synthesize --------------------------------------------------------
     def synthesize(self, plan: Plan, results: list[Result]) -> str:
         ctx = self._memory_context(plan.goal, exclude=("result:", "goal"))
-        sections = [f"# Chief AI — Integrated Result", "", f"Goal: {plan.goal}", ""]
+        sections = ["# Chief AI — Integrated Result", "", f"Goal: {plan.goal}", ""]
         if ctx:
             sections.append(ctx)
             sections.append("")
@@ -140,8 +141,11 @@ class ChiefAI:
             res = next((r for r in results if r.task_id == task.id), None)
             if not res:
                 continue
-            agent = get_sub_agent(task.sub_agent)
-            sections.append(f"## {agent.name} ({agent.department})")
+            if task.sub_agent:
+                agent = get_sub_agent(task.sub_agent)
+                sections.append(f"## {agent.name} ({agent.department})")
+            else:
+                sections.append(f"## Task {task.id}")
             sections.append(res.content)
             sections.append("")
         return "\n".join(sections)
@@ -191,6 +195,8 @@ class ChiefAI:
                     res = fut.result()
                     results[res.task_id] = res
                     done.add(res.task_id)
+                    if res.sub_agent:
+                        done.add(res.sub_agent)
                     pending.pop(res.task_id, None)
                     yield {
                         "type": "task_done",

@@ -23,8 +23,20 @@ class Project(BaseModel):
 
 
 PROJECTS = [
-    Project(id="1", title="Chief AI", description="Multi-agent orchestrator", tech=["Python"], url="#"),
-    Project(id="2", title="AdaptiveAgent", description="Adaptive AI agent", tech=["Python"], url="#"),
+    Project(
+        id="1",
+        title="Chief AI",
+        description="Multi-agent orchestrator",
+        tech=["Python"],
+        url="#",
+    ),
+    Project(
+        id="2",
+        title="AdaptiveAgent",
+        description="Adaptive AI agent",
+        tech=["Python"],
+        url="#",
+    ),
 ]
 
 

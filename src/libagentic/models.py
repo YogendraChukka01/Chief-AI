@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from tavily import TavilyClient
+from tavily import TavilyClient  # type: ignore[import-untyped]
 
 
 @dataclass

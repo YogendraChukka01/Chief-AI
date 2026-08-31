@@ -10,19 +10,19 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Optional
 
 import yaml
 
 from ..config import default_model
 from ..core.registry import DEPARTMENTS, list_sub_agents
-from ..core.types import Permission, SubAgent
+from ..core.types import SubAgent
 
 AGENTS_DIR = os.path.join(".opencode", "agents")
 
 
 def _frontmatter(block: dict) -> str:
-    return "---\n" + yaml.safe_dump(block, default_flow_style=False, sort_keys=False) + "---\n"
+    dumped = yaml.safe_dump(block, default_flow_style=False, sort_keys=False)
+    return f"---\n{dumped}---\n"
 
 
 def render_subagent(sub: SubAgent) -> str:
@@ -65,7 +65,9 @@ never by impersonating them. When tasks depend on each other, sequence them.
     block = {
         "name": "chief",
         "mode": "primary",
-        "description": "Chief AI orchestrator: decomposes goals and delegates to specialist sub-agents.",
+        "description": (
+            "Chief AI orchestrator: decomposes goals and delegates to specialist sub-agents."
+        ),
         "permissions": {
             "read": True,
             "write": True,

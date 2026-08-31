@@ -10,10 +10,11 @@ This shows the full pipeline:
 import os
 import sys
 
-sys.stdout.reconfigure(encoding="utf-8")
-
 from chief_ai import ChiefAI, MockExecutor
 from chief_ai.core.registry import get_sub_agent
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 
 class CodeWritingExecutor(MockExecutor):
@@ -75,7 +76,10 @@ A modern, fast portfolio showcasing projects and skills.
 """
         path = os.path.join(self.OUTPUT_DIR, "docs", "STRATEGY.md")
         self._save(path, content)
-        return f"Strategy document written to {path}\n\nKey decisions: React + Vite + Tailwind, Vercel hosting."
+        return (
+            f"Strategy document written to {path}\n\n"
+            "Key decisions: React + Vite + Tailwind, Vercel hosting."
+        )
 
     def _write_ui_design(self) -> str:
         content = """/* Design System - Portfolio Website */
@@ -238,8 +242,20 @@ class Project(BaseModel):
 
 
 PROJECTS = [
-    Project(id="1", title="Chief AI", description="Multi-agent orchestrator", tech=["Python"], url="#"),
-    Project(id="2", title="AdaptiveAgent", description="Adaptive AI agent", tech=["Python"], url="#"),
+    Project(
+        id="1",
+        title="Chief AI",
+        description="Multi-agent orchestrator",
+        tech=["Python"],
+        url="#",
+    ),
+    Project(
+        id="2",
+        title="AdaptiveAgent",
+        description="Adaptive AI agent",
+        tech=["Python"],
+        url="#",
+    ),
 ]
 
 
@@ -305,9 +321,8 @@ components:
     def _write_tests(self) -> str:
         content = '''"""Tests for portfolio API."""
 
-import pytest
-from fastapi.testclient import TestClient
 from backend.main import app
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -463,7 +478,7 @@ def main():
     print(result)
 
     print("\n--- Generated Files ---")
-    for root, dirs, files in os.walk(CodeWritingExecutor.OUTPUT_DIR):
+    for root, _dirs, files in os.walk(CodeWritingExecutor.OUTPUT_DIR):
         for f in sorted(files):
             rel = os.path.relpath(os.path.join(root, f), CodeWritingExecutor.OUTPUT_DIR)
             size = os.path.getsize(os.path.join(root, f))

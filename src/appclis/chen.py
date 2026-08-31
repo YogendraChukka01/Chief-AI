@@ -7,7 +7,7 @@ from os import environ
 import typer
 from dotenv import load_dotenv
 from rich.console import Console
-from tavily import TavilyClient
+from tavily import TavilyClient  # type: ignore[import-untyped]
 
 from appclis.settings.settings_manager import SettingsManager
 from libagentic.agents import get_chen_agent

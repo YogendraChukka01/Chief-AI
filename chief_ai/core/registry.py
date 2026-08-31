@@ -7,8 +7,6 @@ keep agent definitions here rather than hand-editing the generated files.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from .types import Department, Permission, SubAgent
 
 # ---------------------------------------------------------------------------
@@ -28,7 +26,10 @@ _DEPT_DEFAULTS: dict[str, tuple[list[str], dict[Permission, bool]]] = {
         ["read", "write", "bash", "web"],
         _perms(Permission.READ, Permission.WRITE, Permission.EXECUTE, Permission.NETWORK),
     ),
-    "design": (["read", "write", "web"], _perms(Permission.READ, Permission.WRITE, Permission.NETWORK)),
+    "design": (
+        ["read", "write", "web"],
+        _perms(Permission.READ, Permission.WRITE, Permission.NETWORK),
+    ),
     "devops": (
         ["read", "write", "bash", "web"],
         _perms(Permission.READ, Permission.WRITE, Permission.EXECUTE, Permission.NETWORK),
@@ -37,9 +38,15 @@ _DEPT_DEFAULTS: dict[str, tuple[list[str], dict[Permission, bool]]] = {
         ["read", "write", "bash", "web"],
         _perms(Permission.READ, Permission.WRITE, Permission.EXECUTE, Permission.NETWORK),
     ),
-    "documentation": (["read", "write", "web"], _perms(Permission.READ, Permission.WRITE, Permission.NETWORK)),
+    "documentation": (
+        ["read", "write", "web"],
+        _perms(Permission.READ, Permission.WRITE, Permission.NETWORK),
+    ),
     "research": (["read", "web"], _perms(Permission.READ, Permission.NETWORK)),
-    "marketing": (["read", "write", "web"], _perms(Permission.READ, Permission.WRITE, Permission.NETWORK)),
+    "marketing": (
+        ["read", "write", "web"],
+        _perms(Permission.READ, Permission.WRITE, Permission.NETWORK),
+    ),
     "finance": (["read", "web"], _perms(Permission.READ, Permission.NETWORK)),
     "legal": (["read", "web"], _perms(Permission.READ, Permission.NETWORK)),
     "memory": (["read", "write"], _perms(Permission.READ, Permission.WRITE)),
@@ -76,9 +83,9 @@ class _Spec:
         name: str,
         description: str,
         tags: list[str],
-        tools: Optional[list[str]] = None,
-        perms: Optional[dict[Permission, bool]] = None,
-        model: Optional[str] = None,
+        tools: list[str] | None = None,
+        perms: dict[Permission, bool] | None = None,
+        model: str | None = None,
     ) -> None:
         self.sid = sid
         self.name = name
@@ -100,10 +107,18 @@ _EXECUTIVE = (
     [
         _Spec("exec-strategy", "Strategy", "Defines goals, roadmaps, and strategic direction.",
               ["strategy", "goal", "roadmap", "vision", "objective", "plan"]),
-        _Spec("exec-product", "Product Management", "Owns product requirements, scope, and prioritization.",
-              ["product", "feature", "requirements", "prd", "spec", "prioritize", "scope"]),
-        _Spec("exec-startup", "Startup Advisor", "Advises on MVP, validation, and early-stage startup strategy.",
-              ["startup", "mvp", "validation", "founder", "incubator", "pitch"]),
+        _Spec(
+            "exec-product",
+            "Product Management",
+            "Owns product requirements, scope, and prioritization.",
+            ["product", "feature", "requirements", "prd", "spec", "prioritize", "scope"],
+        ),
+        _Spec(
+            "exec-startup",
+            "Startup Advisor",
+            "Advises on MVP, validation, and early-stage startup strategy.",
+            ["startup", "mvp", "validation", "founder", "incubator", "pitch"],
+        ),
         _Spec("exec-decision", "Decision Engine", "Evaluates tradeoffs and recommends decisions.",
               ["decision", "tradeoff", "evaluate", "choose", "option", "recommend"]),
     ],
@@ -114,22 +129,48 @@ _ENGINEERING = (
     "Engineering AI",
     "Builds and architects software across frontend, backend, mobile, desktop, ML, data, and APIs.",
     [
-        _Spec("eng-frontend", "Frontend Expert", "Builds user-facing web interfaces and components.",
-              ["frontend", "front-end", "react", "vue", "css", "html", "component", "ui code", "web app"]),
-        _Spec("eng-backend", "Backend Expert", "Builds servers, services, and business logic.",
-              ["backend", "back-end", "server", "service", "business logic", "node", "python", "go"]),
-        _Spec("eng-mobile", "Mobile Expert", "Builds iOS, Android, and cross-platform mobile apps.",
-              ["mobile", "ios", "android", "react native", "flutter", "swift", "kotlin"]),
-        _Spec("eng-desktop", "Desktop Expert", "Builds desktop applications (Electron, Tauri, native).",
-              ["desktop", "electron", "tauri", "windows", "macos app", "linux app"]),
+        _Spec(
+            "eng-frontend",
+            "Frontend Expert",
+            "Builds user-facing web interfaces and components.",
+            [
+                "frontend", "front-end", "react", "vue", "css",
+                "html", "component", "ui code", "web app",
+            ],
+        ),
+        _Spec(
+            "eng-backend",
+            "Backend Expert",
+            "Builds servers, services, and business logic.",
+            [
+                "backend", "back-end", "server", "service",
+                "business logic", "node", "python", "go",
+            ],
+        ),
+        _Spec(
+            "eng-mobile",
+            "Mobile Expert",
+            "Builds iOS, Android, and cross-platform mobile apps.",
+            ["mobile", "ios", "android", "react native", "flutter", "swift", "kotlin"],
+        ),
+        _Spec(
+            "eng-desktop",
+            "Desktop Expert",
+            "Builds desktop applications (Electron, Tauri, native).",
+            ["desktop", "electron", "tauri", "windows", "macos app", "linux app"],
+        ),
         _Spec("eng-ml", "AI/ML Engineer", "Builds models, LLM pipelines, and inference systems.",
               ["ai", "ml", "model", "llm", "train", "inference", "prompt", "vector"]),
         _Spec("eng-data", "Data Engineer", "Builds pipelines, warehouses, and ETL.",
               ["data", "pipeline", "etl", "warehouse", "datastore", "analytics"]),
         _Spec("eng-api", "API Architect", "Designs REST/GraphQL APIs and contracts.",
               ["api", "rest", "graphql", "endpoint", "contract", "schema"]),
-        _Spec("eng-system", "System Architect", "Designs scalable, distributed system architecture.",
-              ["architecture", "system", "scalability", "distributed", "microservice", "design"]),
+        _Spec(
+            "eng-system",
+            "System Architect",
+            "Designs scalable, distributed system architecture.",
+            ["architecture", "system", "scalability", "distributed", "microservice", "design"],
+        ),
     ],
 )
 
@@ -142,8 +183,12 @@ _DESIGN = (
               ["ui", "interface", "visual", "layout", "screen", "component design", "mockup"]),
         _Spec("design-ux", "UX Researcher", "Researches users and validates usability.",
               ["ux", "research", "usability", "user", "interview", "journey", "persona"]),
-        _Spec("design-graphic", "Graphic Designer", "Produces graphics, illustrations, and visual assets.",
-              ["graphic", "logo", "illustration", "asset", "icon", "banner"]),
+        _Spec(
+            "design-graphic",
+            "Graphic Designer",
+            "Produces graphics, illustrations, and visual assets.",
+            ["graphic", "logo", "illustration", "asset", "icon", "banner"],
+        ),
         _Spec("design-brand", "Brand Designer", "Defines brand identity, tone, and guidelines.",
               ["brand", "identity", "tone", "guideline", "style"]),
         _Spec("design-motion", "Motion Designer", "Creates animations, motion, and video assets.",
@@ -162,8 +207,12 @@ _DEVOPS = (
               ["docker", "container", "image", "compose"]),
         _Spec("devops-k8s", "Kubernetes", "Orchestrates workloads with Kubernetes.",
               ["kubernetes", "k8s", "orchestrat", "helm", "pod", "cluster"]),
-        _Spec("devops-cloud", "Cloud (AWS/GCP/Azure)", "Provisions cloud infrastructure and deployments.",
-              ["aws", "gcp", "azure", "cloud", "deploy", "infrastructure", "terraform"]),
+        _Spec(
+            "devops-cloud",
+            "Cloud (AWS/GCP/Azure)",
+            "Provisions cloud infrastructure and deployments.",
+            ["aws", "gcp", "azure", "cloud", "deploy", "infrastructure", "terraform"],
+        ),
         _Spec("devops-network", "Networking", "Configures networking, DNS, and connectivity.",
               ["network", "dns", "vpc", "proxy", "subnet", "connectivity"]),
         _Spec("devops-security", "Security", "Hardens systems, manages IAM and secrets.",
@@ -198,8 +247,12 @@ _DOCUMENTATION = (
               ["readme", "documentation", "docs update", "getting started"]),
         _Spec("doc-apidocs", "API Docs", "Documents APIs and OpenAPI specs.",
               ["api doc", "openapi", "swagger", "endpoint doc"]),
-        _Spec("doc-techwriting", "Technical Writing", "Authors tutorials, guides, and explanations.",
-              ["technical writing", "tutorial", "guide", "explanation", "how-to"]),
+        _Spec(
+            "doc-techwriting",
+            "Technical Writing",
+            "Authors tutorials, guides, and explanations.",
+            ["technical writing", "tutorial", "guide", "explanation", "how-to"],
+        ),
     ],
 )
 
@@ -212,8 +265,12 @@ _RESEARCH = (
               ["ai research", "paper", "new model", "sota", "benchmark"]),
         _Spec("research-market", "Market Research", "Analyzes markets, trends, and sizing.",
               ["market research", "trend", "market size", "tsam", "sam"]),
-        _Spec("research-competitor", "Competitor Analysis", "Benchmarks competitors and alternatives.",
-              ["competitor", "benchmark", "vs ", "alternative", "landscape"]),
+        _Spec(
+            "research-competitor",
+            "Competitor Analysis",
+            "Benchmarks competitors and alternatives.",
+            ["competitor", "benchmark", "vs ", "alternative", "landscape"],
+        ),
         _Spec("research-patent", "Patent Search", "Searches patents and IP landscape.",
               ["patent", "ip", "intellectual property", "prior art"]),
         _Spec("research-academic", "Academic Research", "Surveys academic literature.",
@@ -252,8 +309,12 @@ _FINANCE = (
               ["pricing", "price", "monetiz", "subscription", "tier"]),
         _Spec("finance-revenue", "Revenue", "Models revenue and sales.",
               ["revenue", "sales", "income", "mrr", "arr"]),
-        _Spec("finance-startup", "Startup Finance", "Advises on runway, fundraising, and cap tables.",
-              ["runway", "fundraising", "cap table", "equity", "valuation", "investor"]),
+        _Spec(
+            "finance-startup",
+            "Startup Finance",
+            "Advises on runway, fundraising, and cap tables.",
+            ["runway", "fundraising", "cap table", "equity", "valuation", "investor"],
+        ),
     ],
 )
 
@@ -327,7 +388,9 @@ def _build_registry() -> list[Department]:
                     prompt=_prompt(spec.name, dept_name, spec.description, spec.tags),
                 )
             )
-        departments.append(Department(id=dept_id, name=dept_name, description=dept_desc, sub_agents=subs))
+        departments.append(
+            Department(id=dept_id, name=dept_name, description=dept_desc, sub_agents=subs)
+        )
     return departments
 
 

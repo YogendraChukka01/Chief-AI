@@ -7,7 +7,11 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid7
+
+try:
+    from uuid import uuid7  # type: ignore[attr-defined]
+except ImportError:
+    from uuid import uuid4 as uuid7
 
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse
 from pydantic_ai.usage import RunUsage
@@ -49,11 +53,11 @@ class SessionManager:
         self.compressed_context: str | None = None
 
         # Lazy-load tiktoken to avoid import issues
-        self._encoding = None
+        self._encoding: Any = None
 
         self._create_session_directory()
 
-    def _get_encoding(self):
+    def _get_encoding(self) -> Any:
         """Lazy-load tiktoken encoding."""
         if self._encoding is None:
             try:
@@ -80,7 +84,8 @@ class SessionManager:
             generated_title = result.output.strip()
 
             try:
-                title_usage = result.usage()
+                usage_val: Any = getattr(result, "usage", None)
+                title_usage = usage_val() if callable(usage_val) else usage_val
                 title_model = getattr(result, "model_name", None)
                 if title_usage:
                     self.log_run_usage(title_usage, title_model)
@@ -221,14 +226,14 @@ class SessionManager:
                                 continue
                             msg_type = "user_message"
                             if self.first_user_message is None and hasattr(part, "content"):
-                                self.first_user_message = part.content
+                                self.first_user_message = str(part.content)
                         else:
                             msg_type = "request_part"
 
                         message_data = {
                             "timestamp": timestamp,
                             "type": msg_type,
-                            "content": part.content,
+                            "content": str(part.content) if hasattr(part, "content") else "",
                             "message_index": self.message_count,
                             "pydantic_type": part.__class__.__name__,
                             "pydantic_data": to_jsonable_python(part),
@@ -242,28 +247,29 @@ class SessionManager:
                     self._log_message_to_history(message_data)
 
             elif isinstance(msg, ModelResponse):
-                for part in msg.parts:
-                    if part.__class__.__name__ == "ToolCallPart":
+                for response_part in msg.parts:
+                    r_part: Any = response_part
+                    if r_part.__class__.__name__ == "ToolCallPart":
                         message_data = {
                             "timestamp": timestamp,
                             "type": "tool_call",
-                            "content": f"Tool call: {getattr(part, 'tool_name', 'unknown')}",
+                            "content": f"Tool call: {getattr(r_part, 'tool_name', 'unknown')}",
                             "message_index": self.message_count,
-                            "pydantic_type": part.__class__.__name__,
-                            "pydantic_data": to_jsonable_python(part),
+                            "pydantic_type": r_part.__class__.__name__,
+                            "pydantic_data": to_jsonable_python(r_part),
                             "model_name": getattr(msg, "model_name", None),
                             "usage": to_jsonable_python(getattr(msg, "usage", None))
                             if hasattr(msg, "usage")
                             else None,
                         }
-                    elif hasattr(part, "content"):
+                    elif hasattr(r_part, "content"):
                         message_data = {
                             "timestamp": timestamp,
                             "type": "assistant_response",
-                            "content": part.content,
+                            "content": r_part.content,
                             "message_index": self.message_count,
-                            "pydantic_type": part.__class__.__name__,
-                            "pydantic_data": to_jsonable_python(part),
+                            "pydantic_type": r_part.__class__.__name__,
+                            "pydantic_data": to_jsonable_python(r_part),
                             "model_name": getattr(msg, "model_name", None),
                             "usage": to_jsonable_python(getattr(msg, "usage", None))
                             if hasattr(msg, "usage")
@@ -402,9 +408,9 @@ class SessionManager:
         except ImportError:
             return []
 
-        pydantic_messages = []
-        current_request_parts = []
-        current_response_parts = []
+        pydantic_messages: list[ModelMessage] = []
+        current_request_parts: list[Any] = []
+        current_response_parts: list[Any] = []
 
         for message in self.messages:
             msg_type = message.get("type", "unknown")
@@ -416,6 +422,7 @@ class SessionManager:
             if pydantic_data:
                 try:
                     pydantic_type = message.get("pydantic_type", "")
+                    part: Any
 
                     if pydantic_type == "UserPromptPart":
                         part = UserPromptPart(**pydantic_data)
@@ -481,7 +488,7 @@ class SessionLister:
         self.sessions_dir = Path.home() / f".{app_name}" / "sessions"
 
     def get_available_sessions(self) -> list[dict[str, Any]]:
-        sessions = []
+        sessions: list[dict[str, Any]] = []
         if not self.sessions_dir.exists():
             return sessions
 
@@ -559,7 +566,7 @@ class SessionLister:
 
             session_num = int(choice)
             if 1 <= session_num <= len(sessions):
-                return sessions[session_num - 1]["session_dir"]
+                return str(sessions[session_num - 1]["session_dir"])
             else:
                 console.print(f"[red]Invalid selection. Please choose 1-{len(sessions)}[/red]")
                 return None

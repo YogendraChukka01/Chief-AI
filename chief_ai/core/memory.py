@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -46,7 +45,7 @@ class MemoryAI:
         if not os.path.exists(self.path):
             return
         try:
-            with open(self.path, "r", encoding="utf-8") as fh:
+            with open(self.path, encoding="utf-8") as fh:
                 raw = json.load(fh)
         except (json.JSONDecodeError, OSError):
             return
@@ -74,11 +73,11 @@ class MemoryAI:
         self._state.history.append({"type": "fact", "key": key})
         self.save()
 
-    def recall(self, key: str) -> Optional[str]:
+    def recall(self, key: str) -> str | None:
         return self._state.facts.get(key)
 
     # -- history -----------------------------------------------------------
-    def log_event(self, event: str, detail: Optional[str] = None) -> None:
+    def log_event(self, event: str, detail: str | None = None) -> None:
         self._state.history.append({"event": event, "detail": detail})
         self.save()
 

@@ -8,9 +8,8 @@ sub-agent for an arbitrary piece of text.
 from __future__ import annotations
 
 import re
-from typing import Optional
 
-from .registry import DEPARTMENTS, get_sub_agent, list_sub_agents
+from .registry import DEPARTMENTS, list_sub_agents
 from .types import SubAgent, Task
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")

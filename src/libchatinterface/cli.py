@@ -36,11 +36,11 @@ class HistoryManager:
         self._ensure_directory()
         self._load_history()
 
-    def _ensure_directory(self):
+    def _ensure_directory(self) -> None:
         """Create ~/.{app_name} directory if it doesn't exist."""
         self.history_dir.mkdir(exist_ok=True)
 
-    def _load_history(self):
+    def _load_history(self) -> None:
         """Load command history from file."""
         if not self.history_file.exists():
             return
@@ -64,20 +64,24 @@ class HistoryManager:
         except Exception:
             self.history = []
 
-    def add_message(self, message: str):
+    def add_message(self, message: str) -> None:
         """Add a user message to history."""
         if message.strip() and message not in ["/quit", "/exit", "/help", "quit", "exit", "help"]:
             model_request = ModelRequest.user_text_prompt(message)
 
             try:
-                model_request_data = {"kind": getattr(model_request, "kind", "user"), "parts": []}
+                parts_list: list[dict[str, Any]] = []
+                model_request_data: dict[str, Any] = {
+                    "kind": getattr(model_request, "kind", "user"),
+                    "parts": parts_list,
+                }
                 for part in model_request.parts:
                     part_data = {
                         "part_kind": getattr(part, "part_kind", "user_prompt"),
                         "content": part.content,
                         "timestamp": part.timestamp.isoformat() if part.timestamp else None,
                     }
-                    model_request_data["parts"].append(part_data)
+                    parts_list.append(part_data)
             except Exception:
                 model_request_data = {
                     "kind": "user",
@@ -128,17 +132,20 @@ class RichHistoryPrompt:
 
             return msvcrt.getch().decode("utf-8", errors="ignore")
         else:
-            import termios
-            import tty
-
-            fd = sys.stdin.fileno()
-            old_settings = termios.tcgetattr(fd)
             try:
-                tty.cbreak(fd)
-                ch = sys.stdin.read(1)
-                return ch
-            finally:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                import termios  # type: ignore[import-not-found,unused-ignore]
+                import tty  # type: ignore[import-not-found,unused-ignore]
+
+                fd = sys.stdin.fileno()
+                old_settings = termios.tcgetattr(fd)  # type: ignore[attr-defined,unused-ignore]
+                try:
+                    tty.cbreak(fd)  # type: ignore[attr-defined,unused-ignore]
+                    ch = sys.stdin.read(1)
+                    return ch
+                finally:
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)  # type: ignore[attr-defined,unused-ignore]
+            except Exception:
+                return sys.stdin.read(1)
 
     def _handle_arrow_keys(self, char: str) -> str | None:
         """Handle arrow key sequences."""
@@ -182,13 +189,13 @@ class RichHistoryPrompt:
         self.console.print(f"{prompt} [dim](up/down for history)[/dim]")
 
         try:
-            import readline
+            import readline  # type: ignore[import-not-found,unused-ignore]
 
-            readline.clear_history()
+            readline.clear_history()  # type: ignore[attr-defined,unused-ignore]
             for item in self.history_manager.get_history():
-                readline.add_history(item)
+                readline.add_history(item)  # type: ignore[attr-defined,unused-ignore]
             result = input().strip()
-        except ImportError:
+        except (ImportError, AttributeError):
             result = Prompt.ask("", console=self.console).strip()
 
         return result
@@ -262,7 +269,9 @@ class ChatInterface:
         if system_prompt:
             self.session_manager.log_system_prompt(system_prompt)
 
-    async def _tool_event_handler(self, ctx, event_stream: AsyncIterable[AgentStreamEvent]):
+    async def _tool_event_handler(
+        self, ctx: Any, event_stream: AsyncIterable[AgentStreamEvent]
+    ) -> None:
         """Handle tool events and display them to user in real-time."""
         async for event in event_stream:
             if isinstance(event, FunctionToolCallEvent):
@@ -280,7 +289,7 @@ class ChatInterface:
             elif isinstance(event, FunctionToolResultEvent):
                 self.console.print("[dim green]Tool completed successfully[/dim green]")
 
-    def show_welcome(self):
+    def show_welcome(self) -> None:
         """Display welcome message."""
         welcome_text = Text(f"{self.assistant_name} AI Assistant", style="bold blue")
         welcome_panel = Panel(
@@ -320,7 +329,7 @@ class ChatInterface:
             f"{self.session_manager.compressed_context}"
         )
 
-        return Agent(
+        return Agent(  # type: ignore[call-overload]
             model=self.agent.model,
             name=self.agent.name,
             system_prompt=extended_prompt,
@@ -509,25 +518,27 @@ Available commands:
                     )
 
                     class DummyStreamContext:
-                        def __init__(self, run_result):
+                        def __init__(self, run_result: Any) -> None:
                             self.result = run_result
 
-                        async def __aenter__(self):
+                        async def __aenter__(self) -> "DummyStreamContext":
                             return self
 
-                        async def __aexit__(self, *args):
+                        async def __aexit__(self, *args: Any) -> None:
                             pass
 
-                        async def stream_text(self, delta=False, debounce_by=0):
-                            yield self.result.output
+                        async def stream_text(
+                            self, delta: bool = False, debounce_by: float = 0
+                        ) -> AsyncIterable[str]:
+                            yield str(self.result.output)
 
-                        def all_messages(self):
-                            return self.result.all_messages()
+                        def all_messages(self) -> list[Any]:
+                            return self.result.all_messages()  # type: ignore[no-any-return]
 
-                        def usage(self):
+                        def usage(self) -> Any:
                             return self.result.usage()
 
-                    stream_context = DummyStreamContext(result)
+                    stream_context: Any = DummyStreamContext(result)
                     result = stream_context
                 else:
                     stream_context = current_agent.run_stream(
@@ -614,7 +625,7 @@ Available commands:
 
             return error_msg
 
-    async def run_chat(self):
+    async def run_chat(self) -> None:
         """Main chat loop with streaming support."""
         self.show_welcome()
 

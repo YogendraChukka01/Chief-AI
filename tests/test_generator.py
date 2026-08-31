@@ -1,5 +1,6 @@
 import os
 import tempfile
+from typing import Any
 
 import yaml
 
@@ -7,13 +8,14 @@ from chief_ai.core.registry import list_sub_agents
 from chief_ai.integrations.opencode_generator import generate
 
 
-def _load_frontmatter(text: str) -> dict:
+def _load_frontmatter(text: str) -> dict[str, Any]:
     assert text.startswith("---\n")
     body = text.split("---\n", 2)[1]
-    return yaml.safe_load(body)
+    res = yaml.safe_load(body)
+    return dict(res) if isinstance(res, dict) else {}
 
 
-def test_generate_writes_chief_and_all_subagents():
+def test_generate_writes_chief_and_all_subagents() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         written = generate(tmp)
         names = {os.path.basename(p) for p in written}
@@ -23,7 +25,7 @@ def test_generate_writes_chief_and_all_subagents():
             assert f"{sub.id}.md" in names
 
 
-def test_generated_subagent_frontmatter_is_valid():
+def test_generated_subagent_frontmatter_is_valid() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         generate(tmp)
         path = os.path.join(tmp, ".opencode", "agents", "eng-frontend.md")
@@ -34,7 +36,7 @@ def test_generated_subagent_frontmatter_is_valid():
         assert fm["permissions"]["write"] is True
 
 
-def test_generated_chief_is_primary_with_task_access():
+def test_generated_chief_is_primary_with_task_access() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         generate(tmp)
         path = os.path.join(tmp, ".opencode", "agents", "chief.md")
@@ -44,7 +46,7 @@ def test_generated_chief_is_primary_with_task_access():
         assert fm["permissions"]["task"]["*"] == "allow"
 
 
-def test_opencode_json_merge_preserves_existing():
+def test_opencode_json_merge_preserves_existing() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         with open(os.path.join(tmp, "opencode.json"), "w") as fh:
             yaml.safe_dump({"model": "anthropic/x", "agent": {"build": {"mode": "primary"}}}, fh)

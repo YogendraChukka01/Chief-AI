@@ -1,10 +1,5 @@
-from .core.types import (
-    Department,
-    Permission,
-    Result,
-    SubAgent,
-    Task,
-)
+from .core.chief import ChiefAI, Executor, MockExecutor
+from .core.memory import MemoryAI
 from .core.registry import (
     DEPARTMENTS,
     get_department,
@@ -14,8 +9,13 @@ from .core.registry import (
     registry,
 )
 from .core.router import decompose, route
-from .core.chief import ChiefAI, Executor, MockExecutor
-from .core.memory import MemoryAI
+from .core.types import (
+    Department,
+    Permission,
+    Result,
+    SubAgent,
+    Task,
+)
 
 __all__ = [
     "Department",

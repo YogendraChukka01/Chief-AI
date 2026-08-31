@@ -3,15 +3,15 @@ from chief_ai.core.router import decompose, route
 BUILD_GOAL = "Build the next version of my portfolio."
 
 
-def test_route_picks_testing_agent():
+def test_route_picks_testing_agent() -> None:
     assert route("write unit tests for the parser").id == "qa-testing"
 
 
-def test_route_picks_readme_agent():
+def test_route_picks_readme_agent() -> None:
     assert route("update the README with setup steps").id == "doc-readme"
 
 
-def test_decompose_implies_workflow_for_build_goal():
+def test_decompose_implies_workflow_for_build_goal() -> None:
     tasks = decompose(BUILD_GOAL)
     ids = {t.sub_agent for t in tasks}
     # A "build ... portfolio" goal should pull in the standard product workflow.
@@ -24,13 +24,13 @@ def test_decompose_implies_workflow_for_build_goal():
     assert "marketing-launch" in ids
 
 
-def test_decompose_orders_by_department():
+def test_decompose_orders_by_department() -> None:
     tasks = decompose(BUILD_GOAL)
     positions = {t.sub_agent: i for i, t in enumerate(tasks)}
     # Executive should come before Engineering, which comes before Marketing.
     assert positions["exec-strategy"] < positions["eng-frontend"] < positions["marketing-launch"]
 
 
-def test_decompose_fallback_single_task():
+def test_decompose_fallback_single_task() -> None:
     tasks = decompose("zzz qqq weird unknown intent")
     assert len(tasks) == 1

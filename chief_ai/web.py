@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
 from .core.chief import ChiefAI
@@ -43,7 +42,10 @@ INDEX_HTML = """<!doctype html>
   main { display:grid; grid-template-columns: 1fr 1fr; gap:16px; padding:0 20px 24px; }
   @media (max-width:900px){ main { grid-template-columns:1fr; } }
   .panel { background:var(--card); border:1px solid #21262d; border-radius:10px; padding:14px; }
-  .panel h2 { margin:0 0 10px; font-size:14px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .panel h2 {
+    margin:0 0 10px; font-size:14px; color:var(--muted);
+    text-transform:uppercase; letter-spacing:.04em;
+  }
   #diagram { display:flex; justify-content:center; }
   .task { border:1px solid #21262d; border-left-width:4px; border-radius:8px;
         padding:10px 12px; margin-bottom:10px; background:#0d1117; }
@@ -64,16 +66,29 @@ INDEX_HTML = """<!doctype html>
 <body>
 <header><h1>Chief AI — Live Plan Visualizer</h1></header>
 <div class="controls">
-  <input id="goal" type="text" placeholder="Describe a goal, e.g. Build the next version of my portfolio" />
+  <input
+    id="goal"
+    type="text"
+    placeholder="Describe a goal, e.g. Build the next version of my portfolio"
+  />
   <button class="primary" id="planBtn">Show Plan</button>
   <button id="runBtn">Run Live</button>
   <label class="chk"><input type="checkbox" id="parallel" /> parallel</label>
 </div>
 <main>
-  <div class="panel"><h2>Dependency Graph</h2><div id="diagram"><span class="hint">Enter a goal and click Show Plan.</span></div></div>
-  <div class="panel"><h2>Tasks</h2><div id="tasks"><span class="hint">No tasks yet.</span></div></div>
+  <div class="panel">
+    <h2>Dependency Graph</h2>
+    <div id="diagram"><span class="hint">Enter a goal and click Show Plan.</span></div>
+  </div>
+  <div class="panel">
+    <h2>Tasks</h2>
+    <div id="tasks"><span class="hint">No tasks yet.</span></div>
+  </div>
 </main>
-<div class="panel" style="margin:0 20px 24px;"><h2>Integrated Result</h2><pre id="result"><span class="hint">Appears when execution completes.</span></pre></div>
+<div class="panel" style="margin:0 20px 24px;">
+  <h2>Integrated Result</h2>
+  <pre id="result"><span class="hint">Appears when execution completes.</span></pre>
+</div>
 
 <script>
   mermaid.initialize({ startOnLoad:false, theme:"dark", securityLevel:"loose" });
@@ -82,8 +97,17 @@ INDEX_HTML = """<!doctype html>
 
   function buildGraph(plan){
     let g = "graph TD\\n";
-    plan.tasks.forEach(t => { g += `${t.id}["${t.name}"]\\n`; });
-    plan.tasks.forEach(t => { (t.dependencies||[]).forEach(d => { g += `${d} --> ${t.id}\\n`; }); });
+    const subToTaskId = {};
+    plan.tasks.forEach(t => {
+      if (t.sub_agent) { subToTaskId[t.sub_agent] = t.id; }
+      g += `${t.id}["${t.name}"]\\n`;
+    });
+    plan.tasks.forEach(t => {
+      (t.dependencies||[]).forEach(d => {
+        const source = subToTaskId[d] || d;
+        g += `${source} --> ${t.id}\\n`;
+      });
+    });
     return g;
   }
   async function renderDiagram(plan){
@@ -105,30 +129,52 @@ INDEX_HTML = """<!doctype html>
         <div class="dept">${escapeHtml(t.department||"")}</div>${body}</div>`;
     }).join("");
   }
-  function escapeHtml(s){ return (s||"").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+  function escapeHtml(s){
+    return (s||"").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  }
 
   async function showPlan(){
     const goal = $("goal").value.trim(); if(!goal) return;
     const r = await fetch("/api/plan?goal=" + encodeURIComponent(goal));
     const plan = await r.json();
     taskState = {};
-    plan.tasks.forEach(t => { taskState[t.id] = { name:t.name, department:t.department, status:"pending", content:"" }; });
+    plan.tasks.forEach(t => {
+      taskState[t.id] = {
+        name: t.name,
+        department: t.department,
+        status: "pending",
+        content: ""
+      };
+    });
     renderDiagram(plan); renderTasks();
   }
   function runLive(){
     const goal = $("goal").value.trim(); if(!goal) return;
     const parallel = $("parallel").checked ? "1" : "0";
     taskState = {}; renderTasks();
-    const es = new EventSource("/api/run?goal=" + encodeURIComponent(goal) + "&parallel=" + parallel);
+    const es = new EventSource(
+      "/api/run?goal=" + encodeURIComponent(goal) + "&parallel=" + parallel
+    );
     es.onmessage = (ev) => {
       const e = JSON.parse(ev.data);
       if(e.type === "plan"){
-        e.plan.tasks.forEach(t => { taskState[t.id] = { name:t.name, department:t.department, status:"pending", content:"" }; });
+        e.plan.tasks.forEach(t => {
+          taskState[t.id] = {
+            name: t.name,
+            department: t.department,
+            status: "pending",
+            content: ""
+          };
+        });
         renderDiagram(e.plan); renderTasks();
       } else if(e.type === "task_start"){
         if(taskState[e.task_id]){ taskState[e.task_id].status = "running"; renderTasks(); }
       } else if(e.type === "task_done"){
-        if(taskState[e.task_id]){ taskState[e.task_id].status = "done"; taskState[e.task_id].content = e.content; renderTasks(); }
+        if(taskState[e.task_id]){
+          taskState[e.task_id].status = "done";
+          taskState[e.task_id].content = e.content;
+          renderTasks();
+        }
       } else if(e.type === "done"){
         $("result").textContent = e.result; es.close();
       }
@@ -197,14 +243,14 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         for event in self.chief.stream(goal, parallel=parallel):
-            self.wfile.write(f"data: {json.dumps(event)}\n\n".encode("utf-8"))
+            self.wfile.write(f"data: {json.dumps(event)}\n\n".encode())
             self.wfile.flush()
 
-    def log_message(self, *args) -> None:  # silence default logging
+    def log_message(self, *args: object) -> None:  # silence default logging
         pass
 
 
-def _agent_name(sub_id: Optional[str]) -> str:
+def _agent_name(sub_id: str | None) -> str:
     from .core.registry import get_sub_agent
 
     if not sub_id:
@@ -215,7 +261,9 @@ def _agent_name(sub_id: Optional[str]) -> str:
         return "?"
 
 
-def make_server(host: str = "127.0.0.1", port: int = 8000, use_opencode: bool = False) -> ThreadingHTTPServer:
+def make_server(
+    host: str = "127.0.0.1", port: int = 8000, use_opencode: bool = False
+) -> ThreadingHTTPServer:
     executor = OpencodeRunner() if use_opencode else None
     chief = ChiefAI(memory=MemoryAI(), executor=executor)
 
