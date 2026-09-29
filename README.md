@@ -1,338 +1,204 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=flat"/>
+  <img src="https://img.shields.io/badge/Python-3.12%2B-blue?style=flat"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat"/>
-  <img src="https://img.shields.io/badge/pydantic--ai-333?style=flat"/>
+  <img src="https://img.shields.io/badge/pydantic--ai-1.0%2B-333?style=flat"/>
   <img src="https://img.shields.io/badge/opencode-native-black?style=flat"/>
+  <img src="https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat"/>
 </p>
 
-# Chief-AI
+# Chief-AI & Chen AI Assistant
 
-> A single **Chief AI** that orchestrates a team of **specialized sub-agents** — built as a Python framework that compiles into native [opencode](https://opencode.ai) agents.
+> A multi-agent operating system and terminal AI companion for software projects. Orchestrate specialized sub-agents with **Chief-AI** compiled natively into [opencode](https://opencode.ai), or converse with **Chen**, an interactive terminal AI assistant with web search, multi-provider fallback, and secure key management.
 
-Chief-AI is a multi-agent operating system for software projects. You interact with exactly one agent — the **Chief** — which understands your goal, decomposes it into tasks, delegates each task to the most qualified specialist, and returns a single, coherent result. Every specialist runs as a real **opencode sub-agent**, so there are no external LLM keys to manage from Python.
+---
 
-## Project Snapshot
+## 🌟 Executive Overview
 
-```
-┌──────────────────────────────────────────────────────┐
-│ 🏗️ Chief-AI                                          │
-│                                                      │
-│ Multi-agent orchestrator for software projects       │
-│                                                      │
-│ AI        Backend      DevOps       QA              │
-│ Python    pydantic-ai  Testing      pytest           │
-│ 11 Depts  opencode     SSE Stream   Registry         │
-│ 55 Agents Web UI       Memory AI    MockExecutor     │
-│                                                      │
-│ Status: Active  License: MIT                          │
-└──────────────────────────────────────────────────────┘
-```
+**Chief-AI** provides a multi-agent framework where you interact with a single primary agent — the **Chief**. The Chief understands high-level project goals, decomposes them into structured task graphs, routes each task to domain specialist sub-agents across **11 departments and 55 sub-agents**, and synthesizes the outputs into a coherent deliverable.
 
-## How It Works
+**Chen** is an interactive, terminal-first conversational AI agent built on top of `pydantic-ai`. It features web search integration (via Tavily), token usage & cost tracking, multi-provider LLM support (Anthropic Claude, OpenAI, OpenRouter), and secure credential storage via OS keyrings.
 
 ```
-Goal → decompose() → Ordered Task List
-                       ↓
-                     Router (tags + intent matching)
-                       ↓
-     Department-sorted dispatch → ThreadPoolExecutor
-                       ↓
-         OpencodeRunner (real sub-agents) or MockExecutor
-                       ↓
-          MemoryAI context injected per task
-                       ↓
-                 Synthesize → coherent result
+┌────────────────────────────────────────────────────────────────────────┐
+│                              Chief-AI                                  │
+├───────────────────────────────────┬────────────────────────────────────┤
+│           chief_ai/               │                src/                │
+│ (Multi-Agent Orchestrator)        │ (pydantic-ai & Terminal Chat)      │
+├───────────────────────────────────┼────────────────────────────────────┤
+│ • 11 Departments & 55 Agents      │ • Chen Terminal Chat Assistant     │
+│ • Deterministic Router & DAG      │ • Multi-Provider LLM Fallbacks     │
+│ • Web UI & SSE Live Streaming     │ • Tavily Web Search Tools          │
+│ • Memory AI & Context Retrieval   │ • Keyring Secret Store & Costs     │
+└───────────────────────────────────┴────────────────────────────────────┘
 ```
 
 ---
 
-## The Org Chart
+## 🎯 Primary Capabilities
+
+### 1. Chief-AI Multi-Agent Framework
+- **11 Departments & 55 Specialized Sub-Agents**: Covering Executive Strategy, Engineering, Design, DevOps, QA, Documentation, Research, Marketing, Finance, Legal, and Memory AI.
+- **Deterministic Routing & Task Decomposition**: `decompose(goal)` builds an ordered, dependency-aware DAG without requiring upfront LLM planning calls.
+- **Dependency-Aware Parallel Execution**: Task DAGs execute independent sub-agents concurrently via `ThreadPoolExecutor` or async task runners.
+- **Native opencode Compilation**: `chief generate` compiles the Python agent registry (`registry.py`) into native `.opencode/agents/*.md` and `opencode.json` files.
+- **Live SSE Web UI & Mermaid DAG Viewer**: `chief serve` launches a zero-dependency web server displaying live task execution status and Mermaid DAG visualizations.
+- **Memory AI**: Maintains persistent project facts, an entity knowledge graph, event history, and keyword-based context retrieval.
+
+### 2. Chen AI Terminal Assistant
+- **Interactive Terminal Chat**: Powered by `pydantic-ai` and `rich` with markdown rendering and session management.
+- **Multi-Provider LLM Support**: Automatic fallback and model selection across Anthropic (Claude 3.5 Sonnet / Haiku), OpenAI (GPT-4o), and OpenRouter (DeepSeek Chat).
+- **Web Search Tools**: Integrated Tavily search tool for fetching real-time web context.
+- **Secure Keyring Storage**: Safely stores API keys in system keyrings (Keychain, SecretService, Credential Manager).
+- **Cost & Token Estimation**: Real-time token calculation and cost tracking for prompt, completion, and cached tokens.
+
+---
+
+## 🏛️ The Org Chart
 
 ```
         ┌─────────────────────────────────────────┐
-        │              Chief AI (primary)           │
-        │     understands · decomposes · delegates  │
-        └───────────────┬───────────────────────────┘
-                        │  @mention / Task tool
-        ┌───────────────┼───────────────────────────┐
-        ▼               ▼                           ▼
-  Executive AI     Engineering AI              Design AI
-  ├ Strategy       ├ Frontend Expert           ├ UI Designer
-  ├ Product        ├ Backend Expert            ├ UX Researcher
-  ├ Startup        ├ Mobile Expert             ├ Graphic Designer
-  └ Decision       ├ Desktop Expert            ├ Brand Designer
-                   ├ AI/ML Engineer            └ Motion Designer
+        │              Chief AI (primary)         │
+        │     understands · decomposes · delegates│
+        └───────────────┬─────────────────────────┘
+                        │
+        ┌───────────────┼─────────────────────────┐
+        ▼               ▼                         ▼
+  Executive AI     Engineering AI            Design AI
+  ├ Strategy       ├ Frontend Expert         ├ UI Designer
+  ├ Product        ├ Backend Expert          ├ UX Researcher
+  ├ Startup        ├ Mobile Expert           ├ Graphic Designer
+  └ Decision       ├ Desktop Expert          ├ Brand Designer
+                   ├ AI/ML Engineer          └ Motion Designer
                    ├ Data Engineer
-                   ├ API Architect             DevOps AI    QA AI
-                   └ System Architect          ├ Linux      ├ Testing
-                                               ├ Docker     ├ Bug Hunting
-                                               ├ Kubernetes ├ Performance
-                                               ├ Cloud      └ Security Audit
-                                               ├ Networking
-                                               └ Security
+                   ├ API Architect           DevOps AI    QA AI
+                   └ System Architect        ├ Linux      ├ Testing
+                                             ├ Docker     ├ Bug Hunting
+                                             ├ Kubernetes ├ Performance
+                                             ├ Cloud      └ Security Audit
+                                             ├ Networking
+                                             └ Security
 
   Documentation AI · Research AI · Marketing AI · Finance AI · Legal AI · Memory AI
 ```
 
 ---
 
-## Why Chief-AI?
+## 🛠️ Tech Stack
 
-| Problem | Chief-AI's answer |
-| --- | --- |
-| One model can't be an expert at everything | A department per domain, a specialist per concern |
-| Context gets lost between tools | A single orchestrator retains the goal end-to-end |
-| Agents need a host runtime | Compiles to **opencode sub-agents** — no bespoke infra |
-| Config drift between code and agents | The Python registry is the **single source of truth** |
-
----
-
-## Feature overview
-
-- **11 departments, 55 sub-agents** covering the full product lifecycle.
-- **Deterministic routing** — `decompose()` turns a goal into an ordered, department-sorted task list.
-- **Two execution backends** — `MockExecutor` for instant previews, `OpencodeRunner` for live sub-agent execution.
-- **Persistent memory** — long-term facts, a knowledge graph, project history, and keyword context retrieval.
-- **Reproducible artifacts** — `chief generate` emits every `.opencode/agents/*.md` and `opencode.json` from the registry.
-- **Tested** — registry, router, and generator covered by `pytest`.
+- **Language & Runtime**: Python 3.12+ · `uv` / `pip`
+- **Agent Orchestration**: `pydantic-ai` · `argparse` · `typer` · `rich`
+- **Execution Runtimes**: `opencode` (sub-agents) · `ThreadPoolExecutor` (parallel scheduling) · Standard Library HTTP/SSE
+- **Model Providers**: Anthropic · OpenAI · OpenRouter
+- **Tools & Security**: Tavily Search · `keyring` (Secure Storage) · `pydantic-settings`
+- **Testing & Quality**: `pytest` · `pytest-asyncio` · `ruff` · `mypy`
 
 ---
 
-## Tech Stack
+## ⚡ Quick Start & Installation
 
-### Core
-Python 3.10+ · pydantic-ai · argparse · ThreadPoolExecutor · Standard library (HTTP server for web UI)
+### Prerequisites
+- Python 3.12+
+- `uv` (recommended) or `pip`
 
-### AI / Agent Runtime
-opencode (native sub-agents) · LLM providers (via opencode)
-
-### Orchestration
-Registry-driven routing · Deterministic task decomposition · Dependency-aware parallel scheduling · SSE streaming for web UI
-
-### Memory
-Persistent facts · Knowledge graph · Project history · Keyword-based context retrieval
-
-### Engineering
-Git · pytest · Mermaid (diagram rendering) · Python packaging (setuptools)
-
----
-
-## Engineering Decisions
-
-### Why Python?
-The orchestration logic (decomposition, routing, scheduling, synthesis) is deterministic and fast — it doesn't need an LLM. Python's data classes, type hints, and `ThreadPoolExecutor` make the registry and router clean and testable without pulling in a heavy framework.
-
-### Why opencode as the execution backend?
-Each specialist is generated as a native opencode sub-agent (`.md` file + `opencode.json`). This means:
-- No custom runtime to maintain
-- Real LLM execution via opencode's infrastructure
-- Automatic permission scoping per agent
-- The Python registry is the only source of truth
-
-### Why a registry-driven approach?
-All 55 agents are defined as data in `registry.py`. This makes the system inspectable (`chief list`), testable (`test_registry.py`), and reproducible (`chief generate` rebuilds all opencode files from the registry).
-
-### Why MockExecutor?
-Allows instant, deterministic previews of execution plans without making LLM calls. Perfect for testing the orchestration logic and for live UI demos.
-
----
-
-## Installation
-
-Requires Python 3.10+.
+### 1. Installation
 
 ```bash
+# Clone repository
 git clone https://github.com/YogendraChukka01/Chief-AI.git
 cd Chief-AI
-pip install -e ".[dev]"
+
+# Install dependencies
+uv sync --extra dev
+# or: pip install -e ".[dev]"
 ```
 
-To execute sub-agents for real, install [opencode](https://opencode.ai/docs/install)
-and ensure the `opencode` binary is on your `PATH`.
-
----
-
-## Quick start
+### 2. Using Chief AI Orchestrator
 
 ```bash
-# 1. Preview how the Chief decomposes a goal (no LLM calls)
-chief plan "Build the next version of my portfolio"
+# Preview plan decomposition (no LLM calls required)
+uv run python -m chief_ai.cli plan "Build a real-time web chat application"
 
-# 2. Execute with the mock executor (instant, deterministic)
-chief run "Build the next version of my portfolio"
+# Execute plan using MockExecutor (instant preview)
+uv run python -m chief_ai.cli run "Build a real-time web chat application"
 
-# 3. Execute with REAL opencode sub-agents
-chief run "Build the next version of my portfolio" --opencode
+# Execute plan with parallel task execution
+uv run python -m chief_ai.cli run "Build a real-time web chat application" --parallel
 
-# 4. Run teams of independent agents concurrently
-chief run "Build the next version of my portfolio" --parallel
+# Execute using real opencode sub-agents
+uv run python -m chief_ai.cli run "Build a real-time web chat application" --opencode
 
-# 5. Launch the live-plan web UI (zero dependencies)
-chief serve --port 8000
-# open http://127.0.0.1:8000
+# Launch live web UI & DAG viewer
+uv run python -m chief_ai.cli serve --port 8000
+# Open http://127.0.0.1:8000 in your browser
 
-# 6. (Re)generate the .opencode/ agent files from the registry
-chief generate
+# Re-generate .opencode agent files from the registry
+uv run python -m chief_ai.cli generate
 
-# 7. Inspect the org chart
-chief list
+# List all departments and sub-agents
+uv run python -m chief_ai.cli list
 ```
 
-After `chief generate`, open the project in opencode and switch to the **chief**
-primary agent (Tab, or `@chief`). It will delegate work to the `@<agent>`
-specialists automatically.
+### 3. Using Chen Terminal Assistant
 
-### Web UI
+```bash
+# Run onboarding setup (API keys and configuration)
+uv run chen onboard
 
-`chief serve` starts a small web server (standard library only — no extra
-dependencies) that:
+# Launch interactive terminal session
+uv run chen
 
-- renders the goal's **dependency DAG** with [mermaid](https://mermaid.js.org),
-- **streams execution live** over Server-Sent Events as the Chief dispatches each
-  sub-agent, updating task cards from *pending → running → done*.
-
-Open `http://127.0.0.1:8000`, type a goal, and click **Show Plan** then **Run Live**.
-
-### Programmatic usage
-
-```python
-from chief_ai import ChiefAI, MockExecutor
-
-chief = ChiefAI(executor=MockExecutor())
-plan = chief.plan("Ship a v2 of the marketing site")
-print(plan.render())
-
-result = chief.execute("Ship a v2 of the marketing site")
-print(result)
+# View or update configuration settings
+uv run chen config list
+uv run chen config set openai_api_key "sk-..."
 ```
 
 ---
 
-## Architecture
+## 📐 System Architecture
 
 ```
 Chief-AI/
-├── chief_ai/
+├── chief_ai/                   # Chief AI Multi-Agent Framework
 │   ├── core/
-│   │   ├── types.py        # Department, SubAgent, Task, Result, Permission
-│   │   ├── registry.py     # SINGLE SOURCE OF TRUTH: 11 depts + 55 agents
-│   │   ├── router.py       # decompose(goal) -> tasks ; route(text) -> agent
-│   │   ├── chief.py        # ChiefAI orchestrator: plan → dispatch → synthesize
-│   │   └── memory.py       # MemoryAI: facts, graph, history, retrieval
+│   │   ├── types.py            # Department, SubAgent, Task, Result, Permission
+│   │   ├── registry.py         # SINGLE SOURCE OF TRUTH: 11 depts + 55 agents
+│   │   ├── router.py           # decompose(goal) -> tasks ; route(text) -> agent
+│   │   ├── chief.py            # ChiefAI orchestrator: plan → dispatch → synthesize
+│   │   └── memory.py           # MemoryAI: facts, graph, history, retrieval
 │   ├── integrations/
-│   │   ├── opencode_generator.py  # registry -> .opencode/agents/*.md + opencode.json
-│   │   └── opencode_runner.py     # Executor that shells out to `opencode run`
-│   └── cli.py              # `chief plan | run | generate | list`
-├── .opencode/
-│   ├── agents/             # chief.md (primary) + one .md per specialist (generated)
-│   └── opencode.json       # wires the chief primary agent
-└── tests/
+│   │   ├── opencode_generator.py# registry -> .opencode/agents/*.md + opencode.json
+│   │   └── opencode_runner.py  # Executor that shells out to `opencode run`
+│   ├── cli.py                  # `chief plan | run | generate | list | serve`
+│   └── web.py                  # SSE live stream & Mermaid DAG server
+├── src/                        # Agentic & Terminal Assistant Libraries
+│   ├── libagentic/             # Provider models, keyring store, tools & logging
+│   ├── libchatinterface/       # Chat session management, cost tracking, markdown UI
+│   └── appclis/                # Typer CLI wrappers for chief and chen
+├── PROJECT_ANALYSIS.md         # Full architectural analysis & roadmap
+├── .opencode/                  # Generated opencode sub-agent markdown files
+└── tests/                      # Pytest test suite
 ```
-
-### Execution model
-
-1. **Python owns the logic.** The `ChiefAI` orchestrator plans, routes, dispatches,
-   and synthesizes using only the local registry — no network calls.
-2. **opencode owns the execution.** Each specialist is a generated sub-agent with
-   scoped permissions. The `chief` primary agent invokes them via the Task tool /
-   `@mention`, so the actual LLM work happens inside opencode.
-3. **One source of truth.** Edit agents in `chief_ai/core/registry.py`, then run
-   `chief generate` to rebuild every `.opencode/` file.
 
 ---
 
-## The org chart
+## 🧪 Testing & Verification
 
-| Department | Sub-agents |
-| --- | --- |
-| **Executive AI** | Strategy · Product Management · Startup Advisor · Decision Engine |
-| **Engineering AI** | Frontend · Backend · Mobile · Desktop · AI/ML · Data · API Architect · System Architect |
-| **Design AI** | UI · UX Researcher · Graphic · Brand · Motion |
-| **DevOps AI** | Linux · Docker · Kubernetes · Cloud · Networking · Security |
-| **QA AI** | Testing · Bug Hunting · Performance · Security Audit |
-| **Documentation AI** | PRDs · READMEs · API Docs · Technical Writing |
-| **Research AI** | AI Research · Market · Competitor · Patent · Academic |
-| **Marketing AI** | SEO · LinkedIn · GitHub · Portfolio · Social Media · Launch Strategy |
-| **Finance AI** | Budgeting · Pricing · Revenue · Startup Finance |
-| **Legal AI** | Licenses · Privacy · Terms · Compliance |
-| **Memory AI** | Long-term · Knowledge Graph · History · Context Retrieval · Learning Engine |
-
----
-
-## Extending Chief-AI
-
-All agents live in `chief_ai/core/registry.py`. To add a specialist:
-
-```python
-_Spec("eng-game", "Game Engine Expert", "Builds real-time game engines.",
-      ["game", "engine", "unity", "unreal", "godot"])
-```
-
-then:
+Run the comprehensive test suite with `pytest`:
 
 ```bash
-chief generate   # rebuilds .opencode/agents/eng-game.md
+uv run --extra dev pytest
 ```
 
-Permissions and tools are inherited from the parent department preset and can be
-overridden per-agent. See `chief_ai/core/registry.py` for the full schema.
+The test suite covers:
+- Registry completeness & unique sub-agent IDs across all 11 departments
+- Deterministic routing and tag/intent matching logic
+- Opencode sub-agent generator and YAML frontmatter validation
+- Parallel task DAG scheduling and result synthesis
+- Web SSE live streaming endpoints and static asset delivery
+- Provider model selection and cost calculations
 
 ---
 
-## Testing
+## 📄 License
 
-```bash
-pytest
-```
-
-Covers registry completeness (11 departments, unique IDs, valid permissions),
-router accuracy (intent → correct agent, build-goal expansion, department ordering),
-and generator validity (frontmatter parses, chief is primary with task access).
-
----
-
-## Roadmap
-
-- [x] Plug `MemoryAI` retrieval into the Chief's prompt context.
-- [x] Per-agent `model` overrides in the registry (and `CHIEF_MODEL` default).
-- [x] Parallel dispatch with dependency-aware scheduling.
-- [x] Web/streaming UI for live plan visualization.
-
----
-
-## Contributing
-
-1. Fork the repository.
-2. Create a feature branch (`git checkout -b feat/...`).
-3. Make your change in `chief_ai/core/registry.py` (or the relevant module) and
-   run `chief generate` if you touched agents.
-4. Ensure `pytest` passes.
-5. Open a pull request.
-
----
-
-## License
-
-This project is licensed under the MIT License — see the `LICENSE` file for details.
-
----
-
-## Acknowledgements
-
-Built on top of [opencode](https://opencode.ai) multi-agent subagents.
-
----
-
-<h3 align="center">
-
-```
-Built by Yogi
-
-  Build.  Learn.  Ship.  Iterate.
-```
-
-</h3>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/—%20AI%20×%20Software%20×%20Product%20×%20Open%20Source-0d1117?style=for-the-badge&labelColor=0d1117&color=7c3aed"/>
-</p>
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
