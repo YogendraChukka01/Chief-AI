@@ -1,4 +1,8 @@
-$schema: https://opencode.ai/config.json
-agent:
-  chief:
-    mode: primary
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "chief": {
+      "mode": "primary"
+    }
+  }
+}

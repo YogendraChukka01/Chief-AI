@@ -2,8 +2,17 @@
 
 from typing import Annotated
 
+from typing import Any
+
 from pydantic_ai import Agent, ModelSettings, Tool
-from pydantic_ai.mcp import MCPServer  # type: ignore[attr-defined]
+try:
+    from pydantic_ai.mcp import MCPServer  # type: ignore[attr-defined]
+except ImportError:
+    try:
+        from pydantic_ai.mcp import FastMCP1Server as MCPServer  # type: ignore[attr-defined]
+    except ImportError:
+        MCPServer = Any  # type: ignore[assignment,misc]
+
 from typing_extensions import Doc
 
 from libagentic.logging import get_logger
