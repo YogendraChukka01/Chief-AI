@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat"/>
 </p>
 
-# Chief-AI & Chen AI Assistant
+# Chief-AI 
 
 > A multi-agent operating system and terminal AI companion for software projects. Orchestrate specialized sub-agents with **Chief-AI** compiled natively into [opencode](https://opencode.ai), or converse with **Chen**, an interactive terminal AI assistant with web search, multi-provider fallback, and secure key management.
 
