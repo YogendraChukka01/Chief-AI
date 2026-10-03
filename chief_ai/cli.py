@@ -5,6 +5,9 @@ Usage:
     chief run  "build the next version of my portfolio" [--opencode]
     chief generate [--target .]
     chief list
+    chief memory list
+    chief memory query "database"
+    chief memory add <key> <value> [--tag TAG] [--category CAT]
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ if sys.platform == "win32":
             sys.stderr.reconfigure(encoding="utf-8")
 
 from .core.chief import ChiefAI, MockExecutor
+from .core.memory import MemoryAI
 from .core.registry import DEPARTMENTS, list_sub_agents
 from .integrations.opencode_generator import generate
 from .integrations.opencode_runner import OpencodeRunner
@@ -81,6 +85,87 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+# -- memory commands ---------------------------------------------------
+def _cmd_memory_list(args: argparse.Namespace) -> int:
+    mem = MemoryAI()
+    facts = mem.list_facts(tag=args.tag, category=args.category)
+    if not facts:
+        print("No memory facts found.")
+        return 0
+
+    print(f"Memory Facts ({len(facts)}):")
+    for k, v in facts.items():
+        meta = mem.get_fact_meta(k) or {}
+        meta_str = ""
+        if meta.get("tags") or meta.get("category"):
+            tags = ", ".join(meta.get("tags", []))
+            cat = meta.get("category") or "-"
+            meta_str = f" [tags: {tags} | category: {cat}]"
+        print(f"  - {k}: {v}{meta_str}")
+    return 0
+
+
+def _cmd_memory_query(args: argparse.Namespace) -> int:
+    mem = MemoryAI()
+    hits = mem.retrieve(
+        query=args.query,
+        limit=args.limit,
+        tag=args.tag,
+        category=args.category,
+    )
+    if not hits:
+        print("No matching memory entries found.")
+        return 0
+
+    print(f"Query Results ({len(hits)}):")
+    for hit in hits:
+        print(f"  - {hit}")
+    return 0
+
+
+def _cmd_memory_add(args: argparse.Namespace) -> int:
+    mem = MemoryAI()
+    tags = [t.strip() for t in args.tag.split(",")] if args.tag else None
+    mem.remember(key=args.key, value=args.value, tags=tags, category=args.category)
+    print(f"Remembered fact: '{args.key}'")
+    return 0
+
+
+def _cmd_memory_remove(args: argparse.Namespace) -> int:
+    mem = MemoryAI()
+    existed = mem.forget(args.key)
+    if existed:
+        print(f"Removed fact: '{args.key}'")
+    else:
+        print(f"Fact '{args.key}' not found in memory.")
+    return 0
+
+
+def _cmd_memory_clear(args: argparse.Namespace) -> int:
+    mem = MemoryAI()
+    mem.clear()
+    print("Memory cleared.")
+    return 0
+
+
+def _cmd_memory_export(args: argparse.Namespace) -> int:
+    mem = MemoryAI()
+    mem.export_memory(args.file)
+    print(f"Exported memory to '{args.file}'.")
+    return 0
+
+
+def _cmd_memory_import(args: argparse.Namespace) -> int:
+    mem = MemoryAI()
+    try:
+        mem.import_memory(args.file, merge=not args.overwrite)
+        print(f"Imported memory from '{args.file}'.")
+    except Exception as err:
+        print(f"Failed to import memory: {err}")
+        return 1
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="chief", description="Chief AI orchestrator CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -108,6 +193,45 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.add_argument("--port", type=int, default=8000)
     p_serve.add_argument("--opencode", action="store_true", help="Use real opencode sub-agents")
     p_serve.set_defaults(func=_cmd_serve)
+
+    # memory subcommands
+    p_mem = sub.add_parser("memory", help="Manage MemoryAI context and facts")
+    mem_sub = p_mem.add_subparsers(dest="memory_command", required=True)
+
+    p_mem_list = mem_sub.add_parser("list", help="List stored memory facts")
+    p_mem_list.add_argument("--tag", help="Filter by tag")
+    p_mem_list.add_argument("--category", help="Filter by category")
+    p_mem_list.set_defaults(func=_cmd_memory_list)
+
+    p_mem_query = mem_sub.add_parser("query", help="Query stored memory context")
+    p_mem_query.add_argument("query", help="Search query string")
+    p_mem_query.add_argument("--limit", type=int, default=5, help="Maximum number of hits")
+    p_mem_query.add_argument("--tag", help="Filter by tag")
+    p_mem_query.add_argument("--category", help="Filter by category")
+    p_mem_query.set_defaults(func=_cmd_memory_query)
+
+    p_mem_add = mem_sub.add_parser("add", help="Add or update a memory fact")
+    p_mem_add.add_argument("key", help="Fact key")
+    p_mem_add.add_argument("value", help="Fact value")
+    p_mem_add.add_argument("--tag", help="Comma-separated tags")
+    p_mem_add.add_argument("--category", help="Fact category")
+    p_mem_add.set_defaults(func=_cmd_memory_add)
+
+    p_mem_rem = mem_sub.add_parser("remove", help="Remove a fact from memory")
+    p_mem_rem.add_argument("key", help="Fact key to remove")
+    p_mem_rem.set_defaults(func=_cmd_memory_remove)
+
+    p_mem_clear = mem_sub.add_parser("clear", help="Clear all stored memory")
+    p_mem_clear.set_defaults(func=_cmd_memory_clear)
+
+    p_mem_exp = mem_sub.add_parser("export", help="Export memory snapshot to a JSON file")
+    p_mem_exp.add_argument("file", help="Export file path")
+    p_mem_exp.set_defaults(func=_cmd_memory_export)
+
+    p_mem_imp = mem_sub.add_parser("import", help="Import memory snapshot from a JSON file")
+    p_mem_imp.add_argument("file", help="Import file path")
+    p_mem_imp.add_argument("--overwrite", action="store_true", help="Overwrite existing memory instead of merging")
+    p_mem_imp.set_defaults(func=_cmd_memory_import)
 
     return parser
 
