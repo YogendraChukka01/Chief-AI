@@ -5,6 +5,9 @@ Usage:
     chief run  "build the next version of my portfolio" [--opencode]
     chief generate [--target .]
     chief list
+    chief memory list
+    chief memory forget <key>
+    chief memory clear
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ if sys.platform == "win32":
             sys.stderr.reconfigure(encoding="utf-8")
 
 from .core.chief import ChiefAI, MockExecutor
+from .core.memory import MemoryAI
 from .core.registry import DEPARTMENTS, list_sub_agents
 from .integrations.opencode_generator import generate
 from .integrations.opencode_runner import OpencodeRunner
@@ -81,6 +85,40 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_memory_list(args: argparse.Namespace) -> int:
+    mem = MemoryAI(path=args.path)
+    facts = mem._state.facts
+    cats = mem._state.categories
+    g = mem.graph()
+
+    print(f"Memory store ({mem.path}): {len(facts)} fact(s)")
+    if facts:
+        for k, v in facts.items():
+            cat_str = f" [{cats[k]}]" if k in cats else ""
+            print(f"  - {k}{cat_str}: {v}")
+    if g["nodes"]:
+        print(f"\nKnowledge Graph: {len(g['nodes'])} node(s), {len(g['edges'])} edge(s)")
+        for n in g["nodes"]:
+            print(f"  - Node {n['id']} ({n['kind']}): {n['label']}")
+    return 0
+
+
+def _cmd_memory_forget(args: argparse.Namespace) -> int:
+    mem = MemoryAI(path=args.path)
+    if mem.forget(args.key):
+        print(f"Forgot fact with key: '{args.key}'")
+    else:
+        print(f"Key not found in memory: '{args.key}'")
+    return 0
+
+
+def _cmd_memory_clear(args: argparse.Namespace) -> int:
+    mem = MemoryAI(path=args.path)
+    mem.clear()
+    print(f"Cleared all memory from store ({mem.path}).")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="chief", description="Chief AI orchestrator CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -108,6 +146,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.add_argument("--port", type=int, default=8000)
     p_serve.add_argument("--opencode", action="store_true", help="Use real opencode sub-agents")
     p_serve.set_defaults(func=_cmd_serve)
+
+    p_mem = sub.add_parser("memory", help="Inspect or manage Chief AI persistent memory")
+    p_mem.add_argument("--path", default=".chief_memory/memory.json", help="Path to memory store file")
+    mem_sub = p_mem.add_subparsers(dest="memory_command", required=True)
+
+    p_mem_list = mem_sub.add_parser("list", help="List facts and knowledge graph summary")
+    p_mem_list.set_defaults(func=_cmd_memory_list)
+
+    p_mem_forget = mem_sub.add_parser("forget", help="Remove a fact from memory")
+    p_mem_forget.add_argument("key", help="Fact key to remove")
+    p_mem_forget.set_defaults(func=_cmd_memory_forget)
+
+    p_mem_clear = mem_sub.add_parser("clear", help="Clear all stored memory")
+    p_mem_clear.set_defaults(func=_cmd_memory_clear)
 
     return parser
 
