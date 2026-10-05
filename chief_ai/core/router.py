@@ -123,8 +123,86 @@ def _ordered() -> list:
     return [sub for dept in DEPARTMENTS for sub in dept.sub_agents]
 
 
+def has_cycle(tasks: list[Task]) -> bool:
+    """Return True if task dependencies contain a cycle."""
+    id_map: dict[str, Task] = {}
+    for t in tasks:
+        id_map[t.id] = t
+        if t.sub_agent:
+            id_map[t.sub_agent] = t
+
+    state: dict[str, int] = {t.id: 0 for t in tasks}
+
+    def dfs(t: Task) -> bool:
+        state[t.id] = 1
+        for dep_id in t.dependencies:
+            dep_task = id_map.get(dep_id)
+            if dep_task is None:
+                continue
+            if state.get(dep_task.id) == 1:
+                return True
+            if state.get(dep_task.id) == 0:
+                if dfs(dep_task):
+                    return True
+        state[t.id] = 2
+        return False
+
+    for t in tasks:
+        if state[t.id] == 0:
+            if dfs(t):
+                return True
+    return False
+
+
+def topological_sort(tasks: list[Task]) -> list[Task]:
+    """Return tasks in topological order based on dependencies.
+
+    If a cycle exists, returns remaining tasks in original input order.
+    """
+    if not tasks:
+        return []
+
+    task_by_id: dict[str, Task] = {t.id: t for t in tasks}
+    id_map: dict[str, Task] = {}
+    for t in tasks:
+        id_map[t.id] = t
+        if t.sub_agent:
+            id_map[t.sub_agent] = t
+
+    in_degree: dict[str, int] = {t.id: 0 for t in tasks}
+    dependents: dict[str, list[str]] = {t.id: [] for t in tasks}
+
+    for t in tasks:
+        for dep_id in t.dependencies:
+            dep_task = id_map.get(dep_id)
+            if dep_task and dep_task.id in in_degree:
+                in_degree[t.id] += 1
+                dependents[dep_task.id].append(t.id)
+
+    queue = [t.id for t in tasks if in_degree[t.id] == 0]
+    sorted_ids: list[str] = []
+
+    while queue:
+        curr_id = queue.pop(0)
+        sorted_ids.append(curr_id)
+        for dep_id in dependents[curr_id]:
+            in_degree[dep_id] -= 1
+            if in_degree[dep_id] == 0:
+                queue.append(dep_id)
+
+    if len(sorted_ids) < len(tasks):
+        remaining = [t.id for t in tasks if t.id not in sorted_ids]
+        sorted_ids.extend(remaining)
+
+    return [task_by_id[tid] for tid in sorted_ids]
+
+
 def _apply_dependencies(by_sub: dict[str, Task]) -> None:
     for sub_id, upstream in _DEPENDENCIES.items():
         if sub_id in by_sub:
-            deps = [u for u in upstream if u in by_sub]
-            by_sub[sub_id].dependencies = deps
+            task = by_sub[sub_id]
+            for u in upstream:
+                if u in by_sub:
+                    task.dependencies.append(u)
+                    if has_cycle(list(by_sub.values())):
+                        task.dependencies.pop()
