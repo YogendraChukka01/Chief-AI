@@ -88,3 +88,20 @@ def test_results_not_leaked_into_synthesis() -> None:
     assert "result:t" not in out
     # But the structured sections must still be present.
     assert "Mobile Expert" in out
+
+
+def test_scheduling_handles_cyclic_dependencies_defensively() -> None:
+    from chief_ai.core.chief import Plan
+    from chief_ai.core.types import Task
+
+    executor = CapturingExecutor()
+    chief = ChiefAI(executor=executor)
+    # Construct a plan with artificial cycle
+    tasks = [
+        Task(id="t1", description="Task 1", sub_agent="eng-frontend", dependencies=["eng-backend"]),
+        Task(id="t2", description="Task 2", sub_agent="eng-backend", dependencies=["eng-frontend"]),
+    ]
+    plan = Plan(goal="Test cycle", tasks=tasks)
+    results = chief._schedule(plan)
+    assert len(results) == 2
+    assert set(executor.dispatched_order) == {"eng-frontend", "eng-backend"}
