@@ -93,7 +93,6 @@ def test_results_not_leaked_into_synthesis() -> None:
 def test_dispatch_injects_upstream_results() -> None:
     executor = CapturingExecutor()
     chief = ChiefAI(executor=executor)
-    plan = chief.plan("Build the next version of my portfolio")
     # Execute through pipeline so upstream results build up
     chief.execute("Build the next version of my portfolio")
     # Check that qa-testing received upstream outputs from eng-frontend
@@ -102,7 +101,7 @@ def test_dispatch_injects_upstream_results() -> None:
 
 
 def test_result_status_tracking() -> None:
-    from chief_ai.core.types import Result, TaskStatus
+    from chief_ai.core.types import TaskStatus
 
     class FailingExecutor(Executor):
         def run(self, sub_agent_id: str, prompt: str) -> str:
