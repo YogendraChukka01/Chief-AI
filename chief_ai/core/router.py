@@ -106,7 +106,58 @@ def decompose(goal: str) -> list[Task]:
                 idx += 1
 
     _apply_dependencies(by_sub)
-    return [by_sub[s.id] for s in _ordered() if s.id in by_sub]
+    unordered = [by_sub[s.id] for s in _ordered() if s.id in by_sub]
+    return topological_sort(unordered)
+
+
+def topological_sort(tasks: list[Task]) -> list[Task]:
+    """Sort tasks topologically according to their dependencies using Kahn's algorithm.
+
+    If a cycle is detected, breaks cycles gracefully by appending remaining
+    tasks in their original order.
+    """
+    if not tasks:
+        return []
+
+    id_map: dict[str, Task] = {}
+    for t in tasks:
+        id_map[t.id] = t
+        if t.sub_agent:
+            id_map[t.sub_agent] = t
+
+    in_degree: dict[str, int] = {t.id: 0 for t in tasks}
+    graph: dict[str, list[str]] = {t.id: [] for t in tasks}
+
+    for t in tasks:
+        deps_in_plan = set()
+        for dep in t.dependencies:
+            if dep in id_map:
+                dep_task = id_map[dep]
+                if dep_task.id != t.id:
+                    deps_in_plan.add(dep_task.id)
+        in_degree[t.id] = len(deps_in_plan)
+        for dep_task_id in deps_in_plan:
+            graph[dep_task_id].append(t.id)
+
+    queue = [t for t in tasks if in_degree[t.id] == 0]
+    sorted_tasks: list[Task] = []
+
+    while queue:
+        curr = queue.pop(0)
+        sorted_tasks.append(curr)
+        for neighbor_id in graph[curr.id]:
+            in_degree[neighbor_id] -= 1
+            if in_degree[neighbor_id] == 0:
+                neighbor_task = id_map[neighbor_id]
+                queue.append(neighbor_task)
+
+    if len(sorted_tasks) < len(tasks):
+        added = {t.id for t in sorted_tasks}
+        for t in tasks:
+            if t.id not in added:
+                sorted_tasks.append(t)
+
+    return sorted_tasks
 
 
 # Downstream agent -> agents it must wait for (only applied when present).

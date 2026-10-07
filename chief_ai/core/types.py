@@ -65,6 +65,15 @@ class Task:
     dependencies: list[str] = field(default_factory=list)
 
 
+class TaskStatus(StrEnum):
+    """Task execution status."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
 @dataclass
 class Result:
     """The output produced by a sub-agent for a task."""
@@ -72,3 +81,5 @@ class Result:
     task_id: str
     sub_agent: str
     content: str
+    status: TaskStatus = TaskStatus.SUCCESS
+    metadata: dict[str, str] = field(default_factory=dict)

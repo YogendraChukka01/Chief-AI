@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from .memory import MemoryAI
 from .registry import get_department, get_sub_agent
 from .router import decompose
-from .types import Result, Task
+from .types import Result, Task, TaskStatus
 
 
 @dataclass
@@ -83,22 +83,49 @@ class ChiefAI:
         return Plan(goal=goal, tasks=decompose(goal))
 
     # -- dispatch ----------------------------------------------------------
-    def dispatch(self, task: Task) -> Result:
+    def dispatch(self, task: Task, upstream_results: list[Result] | None = None) -> Result:
         if not task.sub_agent:
             raise ValueError("Task has no assigned sub-agent")
         agent = get_sub_agent(task.sub_agent)
         ctx = self._memory_context(task.description)
-        prompt = (
-            f"Goal: {task.description}\n\n"
+        prompt_parts = [
+            f"Goal: {task.description}\n",
             f"You are the {agent.name} specialist. Complete your part of this goal "
-            f"and return a focused, integratable result."
-        )
+            f"and return a focused, integratable result.",
+        ]
+
+        if task.dependencies and upstream_results:
+            dep_outputs = []
+            id_map = {r.task_id: r for r in upstream_results}
+            agent_map = {r.sub_agent: r for r in upstream_results if r.sub_agent}
+            for dep in task.dependencies:
+                res = id_map.get(dep) or agent_map.get(dep)
+                if res:
+                    dep_agent_name = get_sub_agent(res.sub_agent).name if res.sub_agent else dep
+                    dep_outputs.append(f"### {dep_agent_name} ({res.task_id})\n{res.content}")
+            if dep_outputs:
+                prompt_parts.append("## Upstream Task Outputs\n" + "\n\n".join(dep_outputs))
+
         if ctx:
-            prompt += f"\n\n{ctx}"
-        content = self.executor.run(task.sub_agent, prompt)
+            prompt_parts.append(ctx)
+
+        prompt = "\n\n".join(prompt_parts)
+
+        try:
+            content = self.executor.run(task.sub_agent, prompt)
+            status = TaskStatus.SUCCESS
+        except Exception as err:
+            content = f"Error executing task {task.id}: {err}"
+            status = TaskStatus.FAILED
+
         self.memory.log_event(f"result:{task.id}", content)
         self.memory.log_event("dispatch", f"{task.id} -> {agent.id}")
-        return Result(task_id=task.id, sub_agent=task.sub_agent, content=content)
+        return Result(
+            task_id=task.id,
+            sub_agent=task.sub_agent,
+            content=content,
+            status=status,
+        )
 
     # -- scheduling --------------------------------------------------------
     def _schedule(self, plan: Plan) -> list[Result]:
@@ -118,7 +145,9 @@ class ChiefAI:
                 ready = list(pending.values())
 
             with ThreadPoolExecutor(max_workers=min(len(ready), 8)) as ex:
-                futures = {ex.submit(self.dispatch, t): t.id for t in ready}
+                futures = {
+                    ex.submit(self.dispatch, t, list(results.values())): t.id for t in ready
+                }
                 for fut in futures:
                     res = fut.result()
                     results[res.task_id] = res
@@ -169,7 +198,7 @@ class ChiefAI:
         else:
             for task in plan.tasks:
                 yield {"type": "task_start", "task_id": task.id, "sub_agent": task.sub_agent}
-                res = self.dispatch(task)
+                res = self.dispatch(task, list(results.values()))
                 results[task.id] = res
                 yield {
                     "type": "task_done",
@@ -190,7 +219,9 @@ class ChiefAI:
             for t in ready:
                 yield {"type": "task_start", "task_id": t.id, "sub_agent": t.sub_agent}
             with ThreadPoolExecutor(max_workers=min(len(ready), 8)) as ex:
-                futures = {ex.submit(self.dispatch, t): t.id for t in ready}
+                futures = {
+                    ex.submit(self.dispatch, t, list(results.values())): t.id for t in ready
+                }
                 for fut in futures:
                     res = fut.result()
                     results[res.task_id] = res
@@ -208,7 +239,12 @@ class ChiefAI:
     # -- full pipeline -----------------------------------------------------
     def execute(self, goal: str, parallel: bool = False) -> str:
         plan = self.plan(goal)
-        results = self._schedule(plan) if parallel else [self.dispatch(t) for t in plan.tasks]
+        if parallel:
+            results = self._schedule(plan)
+        else:
+            results = []
+            for t in plan.tasks:
+                results.append(self.dispatch(t, results))
         return self.synthesize(plan, results)
 
 

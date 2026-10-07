@@ -88,3 +88,29 @@ def test_results_not_leaked_into_synthesis() -> None:
     assert "result:t" not in out
     # But the structured sections must still be present.
     assert "Mobile Expert" in out
+
+
+def test_dispatch_injects_upstream_results() -> None:
+    executor = CapturingExecutor()
+    chief = ChiefAI(executor=executor)
+    plan = chief.plan("Build the next version of my portfolio")
+    # Execute through pipeline so upstream results build up
+    chief.execute("Build the next version of my portfolio")
+    # Check that qa-testing received upstream outputs from eng-frontend
+    last_prompt = executor.last_prompt
+    assert "Upstream Task Outputs" in last_prompt or "Frontend Expert" in last_prompt
+
+
+def test_result_status_tracking() -> None:
+    from chief_ai.core.types import Result, TaskStatus
+
+    class FailingExecutor(Executor):
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            raise RuntimeError("LLM connection failed")
+
+    chief = ChiefAI(executor=FailingExecutor())
+    plan = chief.plan("Fix a bug in backend")
+    res = chief.dispatch(plan.tasks[0])
+    assert res.status == TaskStatus.FAILED
+    assert "Error executing task" in res.content
+    assert "LLM connection failed" in res.content
