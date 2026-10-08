@@ -89,6 +89,10 @@ INDEX_HTML = """<!doctype html>
   <h2>Integrated Result</h2>
   <pre id="result"><span class="hint">Appears when execution completes.</span></pre>
 </div>
+<div class="panel" style="margin:0 20px 24px;">
+  <h2>Memory & Knowledge Graph</h2>
+  <div id="memory"><span class="hint">Loading memory...</span></div>
+</div>
 
 <script>
   mermaid.initialize({ startOnLoad:false, theme:"dark", securityLevel:"loose" });
@@ -181,9 +185,36 @@ INDEX_HTML = """<!doctype html>
     };
     es.onerror = () => es.close();
   }
+  async function loadMemory(){
+    try {
+      const r = await fetch("/api/memory");
+      const data = await r.json();
+      const facts = Object.entries(data.facts || {});
+      const nodes = data.graph ? data.graph.nodes || [] : [];
+      let html = "<div><strong>Facts (" + facts.length + "):</strong></div>";
+      if (!facts.length) {
+        html += '<div class="hint">No facts stored.</div>';
+      } else {
+        html += "<ul style='margin:4px 0 0 18px;padding:0;'>" + facts.map(([k, v]) => {
+          const cat = data.categories[k] ? ` [${escapeHtml(data.categories[k])}]` : "";
+          return `<li><strong>${escapeHtml(k)}</strong>${cat}: ${escapeHtml(v)}</li>`;
+        }).join("") + "</ul>";
+      }
+      if (nodes.length) {
+        html += "<div><strong>Nodes (" + nodes.length + "):</strong></div>";
+        html += "<ul style='margin:4px 0 0 18px;padding:0;'>" +
+          nodes.map(n => `<li>${escapeHtml(n.label)} (${escapeHtml(n.kind)})</li>`).join("") +
+          "</ul>";
+      }
+      $("memory").innerHTML = html;
+    } catch(e) {
+      $("memory").innerHTML = '<span class="hint">Failed to load memory.</span>';
+    }
+  }
   $("planBtn").onclick = showPlan;
   $("runBtn").onclick = runLive;
   $("goal").addEventListener("keydown", e => { if(e.key === "Enter") showPlan(); });
+  loadMemory();
 </script>
 </body>
 </html>
@@ -211,6 +242,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/run":
             self._handle_run(parse_qs(parsed.query))
+            return
+        if parsed.path == "/api/memory":
+            self._handle_memory()
             return
         self._send(404, b"not found", "text/plain")
 
@@ -245,6 +279,17 @@ class _Handler(BaseHTTPRequestHandler):
         for event in self.chief.stream(goal, parallel=parallel):
             self.wfile.write(f"data: {json.dumps(event)}\n\n".encode())
             self.wfile.flush()
+
+    def _handle_memory(self) -> None:
+        mem = self.chief.memory
+        payload = json.dumps(
+            {
+                "facts": mem._state.facts,
+                "categories": mem._state.categories,
+                "graph": mem.graph(),
+            }
+        ).encode("utf-8")
+        self._send(200, payload, "application/json")
 
     def log_message(self, *args: object) -> None:  # silence default logging
         pass
