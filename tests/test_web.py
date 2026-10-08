@@ -47,6 +47,13 @@ def test_web_plan_and_index_endpoints() -> None:
         with urllib.request.urlopen(f"{base}/") as r:
             assert r.status == 200
             assert b"Chief AI" in r.read()
+
+        with urllib.request.urlopen(f"{base}/api/memory") as r:
+            assert r.status == 200
+            mem_data = json.loads(r.read())
+            assert "facts" in mem_data
+            assert "categories" in mem_data
+            assert "graph" in mem_data
     finally:
         server.shutdown()
         t.join(timeout=2)

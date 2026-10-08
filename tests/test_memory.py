@@ -112,3 +112,22 @@ def test_memory_graph_and_history(tmp_path) -> None:
     hits = mem.retrieve("Chief")
     assert len(hits) == 1
     assert "agent_role: Chief AI assistant" in hits[0]
+
+
+def test_memory_retrieve_ranking_and_category_filter(tmp_path) -> None:
+    path = str(tmp_path / "ranking.json")
+    mem = MemoryAI(path=path)
+
+    mem.remember("low_relevance", "python developer", category="tech")
+    mem.remember("high_relevance", "python backend developer python expert", category="tech")
+    mem.remember("other_category", "python database expert", category="db")
+
+    # Category filter
+    tech_hits = mem.retrieve("python developer", category="tech")
+    assert len(tech_hits) == 2
+    # High relevance should come first due to multiple term occurrences
+    assert tech_hits[0].startswith("high_relevance:")
+
+    db_hits = mem.retrieve("python", category="db")
+    assert len(db_hits) == 1
+    assert db_hits[0].startswith("other_category:")
