@@ -113,3 +113,46 @@ def test_result_status_tracking() -> None:
     assert res.status == TaskStatus.FAILED
     assert "Error executing task" in res.content
     assert "LLM connection failed" in res.content
+
+
+def test_retry_mechanism_success_on_retry() -> None:
+    from chief_ai.core.types import TaskStatus
+
+    class FlakyExecutor(Executor):
+        def __init__(self) -> None:
+            self.attempts = 0
+
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            self.attempts += 1
+            if self.attempts < 2:
+                raise RuntimeError("Transient connection reset")
+            return "Recovered task output"
+
+    exec_instance = FlakyExecutor()
+    chief = ChiefAI(executor=exec_instance, max_retries=3)
+    plan = chief.plan("Fix a bug in backend")
+    res = chief.dispatch(plan.tasks[0])
+    assert res.status == TaskStatus.SUCCESS
+    assert exec_instance.attempts == 2
+    assert "Recovered task output" in res.content
+
+
+def test_retry_mechanism_exhausted() -> None:
+    from chief_ai.core.types import TaskStatus
+
+    class AlwaysFailingExecutor(Executor):
+        def __init__(self) -> None:
+            self.attempts = 0
+
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            self.attempts += 1
+            raise RuntimeError("Persistent network error")
+
+    exec_instance = AlwaysFailingExecutor()
+    chief = ChiefAI(executor=exec_instance, max_retries=2)
+    plan = chief.plan("Fix a bug in backend")
+    res = chief.dispatch(plan.tasks[0])
+    assert res.status == TaskStatus.FAILED
+    assert exec_instance.attempts == 2
+    assert "after 2 attempt(s)" in res.content
+    assert "Persistent network error" in res.content

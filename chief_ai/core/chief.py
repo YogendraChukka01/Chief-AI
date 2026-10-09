@@ -65,9 +65,15 @@ class MockExecutor(Executor):
 
 
 class ChiefAI:
-    def __init__(self, memory: MemoryAI | None = None, executor: Executor | None = None) -> None:
+    def __init__(
+        self,
+        memory: MemoryAI | None = None,
+        executor: Executor | None = None,
+        max_retries: int = 1,
+    ) -> None:
         self.memory = memory or MemoryAI()
         self.executor = executor or MockExecutor()
+        self.max_retries = max(1, max_retries)
 
     # -- memory context ----------------------------------------------------
     def _memory_context(self, text: str, exclude: tuple[str, ...] = ()) -> str:
@@ -111,12 +117,22 @@ class ChiefAI:
 
         prompt = "\n\n".join(prompt_parts)
 
-        try:
-            content = self.executor.run(task.sub_agent, prompt)
-            status = TaskStatus.SUCCESS
-        except Exception as err:
-            content = f"Error executing task {task.id}: {err}"
-            status = TaskStatus.FAILED
+        content = ""
+        status = TaskStatus.FAILED
+        last_err: Exception | None = None
+
+        for _attempt in range(1, self.max_retries + 1):
+            try:
+                content = self.executor.run(task.sub_agent, prompt)
+                status = TaskStatus.SUCCESS
+                break
+            except Exception as err:
+                last_err = err
+
+        if status == TaskStatus.FAILED and last_err is not None:
+            content = (
+                f"Error executing task {task.id} after {self.max_retries} attempt(s): {last_err}"
+            )
 
         self.memory.log_event(f"result:{task.id}", content)
         self.memory.log_event("dispatch", f"{task.id} -> {agent.id}")
