@@ -215,8 +215,9 @@ class MemoryAI:
 
     # -- context retrieval -------------------------------------------------
     def retrieve(self, query: str, limit: int = 5, exclude: tuple[str, ...] = ()) -> list[str]:
-        """Return facts whose key or value shares a meaningful term with ``query``.
+        """Return facts whose key or value shares meaningful terms with ``query``,
 
+        sorted by match relevance (unique token matches and frequency).
         Keys starting with any ``exclude`` prefix are skipped (e.g. per-task
         ``result:`` entries, which should not resurface as prior context).
         """
@@ -225,11 +226,16 @@ class MemoryAI:
         tokens = {t for t in re.findall(r"[a-z0-9]{3,}", query.lower())}
         if not tokens:
             return []
-        hits = []
+        scored_hits = []
         for k, v in self._state.facts.items():
             if any(k.startswith(p) for p in exclude):
                 continue
             hay = f"{k} {v}".lower()
-            if any(tok in hay for tok in tokens):
-                hits.append(f"{k}: {v}")
-        return hits[:limit]
+            unique_matches = sum(1 for tok in tokens if tok in hay)
+            if unique_matches > 0:
+                freq = sum(hay.count(tok) for tok in tokens)
+                score = unique_matches * 100 + freq
+                scored_hits.append((score, f"{k}: {v}"))
+
+        scored_hits.sort(key=lambda x: x[0], reverse=True)
+        return [h[1] for h in scored_hits[:limit]]

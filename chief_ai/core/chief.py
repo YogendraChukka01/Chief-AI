@@ -65,9 +65,15 @@ class MockExecutor(Executor):
 
 
 class ChiefAI:
-    def __init__(self, memory: MemoryAI | None = None, executor: Executor | None = None) -> None:
+    def __init__(
+        self,
+        memory: MemoryAI | None = None,
+        executor: Executor | None = None,
+        max_retries: int = 0,
+    ) -> None:
         self.memory = memory or MemoryAI()
         self.executor = executor or MockExecutor()
+        self.max_retries = max_retries
 
     # -- memory context ----------------------------------------------------
     def _memory_context(self, text: str, exclude: tuple[str, ...] = ()) -> str:
@@ -111,12 +117,36 @@ class ChiefAI:
 
         prompt = "\n\n".join(prompt_parts)
 
-        try:
-            content = self.executor.run(task.sub_agent, prompt)
-            status = TaskStatus.SUCCESS
-        except Exception as err:
-            content = f"Error executing task {task.id}: {err}"
-            status = TaskStatus.FAILED
+        attempts = 0
+        last_error = ""
+        content = ""
+        status = TaskStatus.FAILED
+
+        while attempts <= self.max_retries:
+            current_prompt = prompt
+            if attempts > 0 and last_error:
+                current_prompt += (
+                    "\n\n## Previous Attempt Failure Feedback "
+                    f"(Attempt {attempts}/{self.max_retries})\n"
+                    f"The previous attempt failed with the following error/output:\n{last_error}\n"
+                    "Please address these issues and complete the task successfully."
+                )
+
+            try:
+                out = self.executor.run(task.sub_agent, current_prompt)
+                if isinstance(out, str) and "execution failed" in out.lower():
+                    attempts += 1
+                    last_error = out
+                    content = out
+                else:
+                    content = out
+                    status = TaskStatus.SUCCESS
+                    break
+            except Exception as err:
+                attempts += 1
+                last_error = f"Error executing task {task.id}: {err}"
+                content = last_error
+
 
         self.memory.log_event(f"result:{task.id}", content)
         self.memory.log_event("dispatch", f"{task.id} -> {agent.id}")
