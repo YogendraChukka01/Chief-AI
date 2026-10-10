@@ -112,3 +112,18 @@ def test_memory_graph_and_history(tmp_path) -> None:
     hits = mem.retrieve("Chief")
     assert len(hits) == 1
     assert "agent_role: Chief AI assistant" in hits[0]
+
+
+def test_memory_retrieve_relevance_scoring(tmp_path) -> None:
+    path = str(tmp_path / "mem.json")
+    mem = MemoryAI(path=path)
+
+    mem.remember("fact1", "python language programming")
+    mem.remember("fact2", "python web framework fastapi python web")
+    mem.remember("fact3", "unrelated entry")
+
+    hits = mem.retrieve("python web framework")
+    assert len(hits) == 2
+    # fact2 matches all 3 tokens with high frequency, so it ranks first
+    assert hits[0].startswith("fact2:")
+    assert hits[1].startswith("fact1:")

@@ -113,3 +113,30 @@ def test_result_status_tracking() -> None:
     assert res.status == TaskStatus.FAILED
     assert "Error executing task" in res.content
     assert "LLM connection failed" in res.content
+
+
+def test_dispatch_retries_on_failure() -> None:
+    from chief_ai.core.types import TaskStatus
+
+    class RetryExecutor(Executor):
+        def __init__(self) -> None:
+            self.attempts = 0
+            self.prompts: list[str] = []
+
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            self.attempts += 1
+            self.prompts.append(prompt)
+            if self.attempts < 2:
+                raise RuntimeError("Temporary API limit reached")
+            return "Success after retry"
+
+    executor = RetryExecutor()
+    chief = ChiefAI(executor=executor, max_retries=2)
+    plan = chief.plan("Build a mobile app")
+    res = chief.dispatch(plan.tasks[0])
+
+    assert res.status == TaskStatus.SUCCESS
+    assert res.content == "Success after retry"
+    assert executor.attempts == 2
+    assert "Previous Attempt Failure Feedback" in executor.prompts[1]
+    assert "Temporary API limit reached" in executor.prompts[1]

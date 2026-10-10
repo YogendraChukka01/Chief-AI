@@ -40,3 +40,49 @@ class OpencodeRunner(Executor):
         if proc.returncode != 0:
             return f"[{agent.name}] execution failed (exit {proc.returncode}):\n{proc.stderr}"
         return proc.stdout.strip() or f"[{agent.name}] returned no output."
+
+
+class AsyncOpencodeRunner:
+    """Asynchronous headless execution adapter using asyncio subprocess."""
+
+    def __init__(self, timeout: int = 600, binary: str = "opencode") -> None:
+        self.timeout = timeout
+        self.binary = binary
+
+    def _ensure_binary(self) -> None:
+        if shutil.which(self.binary) is None:
+            raise RuntimeError(
+                f"`{self.binary}` binary not found on PATH. Install opencode "
+                "(https://opencode.ai) or use MockExecutor for preview."
+            )
+
+    async def run_async(self, sub_agent_id: str, prompt: str) -> str:
+        import asyncio
+
+        self._ensure_binary()
+        agent = get_sub_agent(sub_agent_id)
+        message = f"@{agent.id} {prompt}"
+
+        proc = await asyncio.create_subprocess_exec(
+            self.binary,
+            "run",
+            message,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        try:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(), timeout=self.timeout
+            )
+        except TimeoutError:
+            proc.kill()
+            await proc.communicate()
+            return f"[{agent.name}] execution timed out after {self.timeout} seconds."
+
+        stdout = stdout_bytes.decode("utf-8", errors="replace")
+        stderr = stderr_bytes.decode("utf-8", errors="replace")
+
+        if proc.returncode != 0:
+            return f"[{agent.name}] execution failed (exit {proc.returncode}):\n{stderr}"
+        return stdout.strip() or f"[{agent.name}] returned no output."
