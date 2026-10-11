@@ -113,3 +113,38 @@ def test_result_status_tracking() -> None:
     assert res.status == TaskStatus.FAILED
     assert "Error executing task" in res.content
     assert "LLM connection failed" in res.content
+
+
+def test_task_retries_on_failure_and_metadata() -> None:
+    from chief_ai.core.types import TaskStatus
+
+    class FlakyExecutor(Executor):
+        def __init__(self, fail_times: int) -> None:
+            self.fail_times = fail_times
+            self.attempts = 0
+
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            self.attempts += 1
+            if self.attempts <= self.fail_times:
+                raise RuntimeError(f"Attempt {self.attempts} failed")
+            return f"Attempt {self.attempts} succeeded"
+
+    # 1. Retry eventually succeeds
+    executor1 = FlakyExecutor(fail_times=2)
+    chief1 = ChiefAI(executor=executor1, max_retries=2)
+    plan1 = chief1.plan("Fix backend bug")
+    res1 = chief1.dispatch(plan1.tasks[0])
+    assert res1.status == TaskStatus.SUCCESS
+    assert "Attempt 3 succeeded" in res1.content
+    assert res1.metadata["attempts"] == "3"
+    assert res1.metadata["retries"] == "2"
+
+    # 2. Retry exhausted, stays failed
+    executor2 = FlakyExecutor(fail_times=5)
+    chief2 = ChiefAI(executor=executor2, max_retries=2)
+    plan2 = chief2.plan("Fix backend bug")
+    res2 = chief2.dispatch(plan2.tasks[0])
+    assert res2.status == TaskStatus.FAILED
+    assert res2.metadata["attempts"] == "3"
+    assert res2.metadata["retries"] == "2"
+    assert "Attempt 3 failed" in res2.metadata["error"]

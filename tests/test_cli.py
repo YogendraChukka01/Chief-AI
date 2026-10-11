@@ -2,8 +2,34 @@
 
 from __future__ import annotations
 
+import json
+
 from chief_ai.cli import main
 from chief_ai.core.memory import MemoryAI
+
+
+def test_cli_run_json_output(capsys) -> None:
+    ret = main(["run", "Build a landing page", "--json"])
+    assert ret == 0
+    captured = capsys.readouterr().out
+    data = json.loads(captured)
+    assert data["goal"] == "Build a landing page"
+    assert len(data["tasks"]) > 0
+    assert len(data["results"]) > 0
+    assert "synthesis" in data
+
+
+def test_cli_run_export_report(tmp_path, capsys) -> None:
+    export_path = str(tmp_path / "report.json")
+    ret = main(["run", "Build a landing page", "--export", export_path])
+    assert ret == 0
+    captured = capsys.readouterr().out
+    assert f"Execution report saved to {export_path}" in captured
+
+    with open(export_path, encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["goal"] == "Build a landing page"
+    assert len(data["results"]) > 0
 
 
 def test_cli_memory_list(tmp_path, capsys) -> None:
