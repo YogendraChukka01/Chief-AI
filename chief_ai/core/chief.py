@@ -65,9 +65,15 @@ class MockExecutor(Executor):
 
 
 class ChiefAI:
-    def __init__(self, memory: MemoryAI | None = None, executor: Executor | None = None) -> None:
+    def __init__(
+        self,
+        memory: MemoryAI | None = None,
+        executor: Executor | None = None,
+        max_retries: int = 0,
+    ) -> None:
         self.memory = memory or MemoryAI()
         self.executor = executor or MockExecutor()
+        self.max_retries = max(0, max_retries)
 
     # -- memory context ----------------------------------------------------
     def _memory_context(self, text: str, exclude: tuple[str, ...] = ()) -> str:
@@ -83,7 +89,12 @@ class ChiefAI:
         return Plan(goal=goal, tasks=decompose(goal))
 
     # -- dispatch ----------------------------------------------------------
-    def dispatch(self, task: Task, upstream_results: list[Result] | None = None) -> Result:
+    def dispatch(
+        self,
+        task: Task,
+        upstream_results: list[Result] | None = None,
+        max_retries: int | None = None,
+    ) -> Result:
         if not task.sub_agent:
             raise ValueError("Task has no assigned sub-agent")
         agent = get_sub_agent(task.sub_agent)
@@ -111,12 +122,33 @@ class ChiefAI:
 
         prompt = "\n\n".join(prompt_parts)
 
-        try:
-            content = self.executor.run(task.sub_agent, prompt)
-            status = TaskStatus.SUCCESS
-        except Exception as err:
-            content = f"Error executing task {task.id}: {err}"
-            status = TaskStatus.FAILED
+        retries_allowed = self.max_retries if max_retries is None else max(0, max_retries)
+        attempts = 0
+        last_err: Exception | None = None
+        content = ""
+        status = TaskStatus.FAILED
+
+        while attempts <= retries_allowed:
+            attempts += 1
+            try:
+                content = self.executor.run(task.sub_agent, prompt)
+                status = TaskStatus.SUCCESS
+                last_err = None
+                break
+            except Exception as err:
+                last_err = err
+                if attempts <= retries_allowed:
+                    continue
+
+        if status == TaskStatus.FAILED and last_err is not None:
+            content = f"Error executing task {task.id}: {last_err}"
+
+        metadata = {
+            "attempts": str(attempts),
+            "retries": str(max(0, attempts - 1)),
+        }
+        if last_err is not None:
+            metadata["error"] = str(last_err)
 
         self.memory.log_event(f"result:{task.id}", content)
         self.memory.log_event("dispatch", f"{task.id} -> {agent.id}")
@@ -125,6 +157,7 @@ class ChiefAI:
             sub_agent=task.sub_agent,
             content=content,
             status=status,
+            metadata=metadata,
         )
 
     # -- scheduling --------------------------------------------------------
@@ -237,7 +270,9 @@ class ChiefAI:
                     }
 
     # -- full pipeline -----------------------------------------------------
-    def execute(self, goal: str, parallel: bool = False) -> str:
+    def execute_plan_and_results(
+        self, goal: str, parallel: bool = False
+    ) -> tuple[Plan, list[Result]]:
         plan = self.plan(goal)
         if parallel:
             results = self._schedule(plan)
@@ -245,6 +280,10 @@ class ChiefAI:
             results = []
             for t in plan.tasks:
                 results.append(self.dispatch(t, results))
+        return plan, results
+
+    def execute(self, goal: str, parallel: bool = False) -> str:
+        plan, results = self.execute_plan_and_results(goal, parallel=parallel)
         return self.synthesize(plan, results)
 
 

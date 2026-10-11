@@ -50,8 +50,44 @@ def _cmd_plan(args: argparse.Namespace) -> int:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     executor = OpencodeRunner() if args.opencode else MockExecutor()
-    chief = ChiefAI(executor=executor)
-    print(chief.execute(args.goal, parallel=args.parallel))
+    max_retries = getattr(args, "max_retries", 0)
+    chief = ChiefAI(executor=executor, max_retries=max_retries)
+    plan, results = chief.execute_plan_and_results(args.goal, parallel=args.parallel)
+    synthesis = chief.synthesize(plan, results)
+
+    if args.json or args.export:
+        data = {
+            "goal": plan.goal,
+            "tasks": [
+                {
+                    "id": t.id,
+                    "department": t.department,
+                    "sub_agent": t.sub_agent,
+                    "dependencies": t.dependencies,
+                }
+                for t in plan.tasks
+            ],
+            "results": [
+                {
+                    "task_id": r.task_id,
+                    "sub_agent": r.sub_agent,
+                    "status": r.status,
+                    "content": r.content,
+                    "metadata": r.metadata,
+                }
+                for r in results
+            ],
+            "synthesis": synthesis,
+        }
+        json_output = json.dumps(data, indent=2)
+        if args.export:
+            with open(args.export, "w", encoding="utf-8") as f:
+                f.write(json_output)
+            print(f"Execution report saved to {args.export}")
+        if args.json:
+            print(json_output)
+    else:
+        print(synthesis)
     return 0
 
 
@@ -132,6 +168,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("goal")
     p_run.add_argument("--opencode", action="store_true", help="Use real opencode sub-agents")
     p_run.add_argument("--parallel", action="store_true", help="Run independent tasks concurrently")
+    p_run.add_argument("--json", action="store_true", help="Output execution result as JSON")
+    p_run.add_argument("--export", help="Path to export JSON execution report")
+    p_run.add_argument(
+        "--max-retries", type=int, default=0, help="Max retries for task execution"
+    )
     p_run.set_defaults(func=_cmd_run)
 
     p_gen = sub.add_parser("generate", help="Emit .opencode agent files and opencode.json")
@@ -148,7 +189,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.set_defaults(func=_cmd_serve)
 
     p_mem = sub.add_parser("memory", help="Inspect or manage Chief AI persistent memory")
-    p_mem.add_argument("--path", default=".chief_memory/memory.json", help="Path to memory store file")
+    p_mem.add_argument(
+        "--path", default=".chief_memory/memory.json", help="Path to memory store file"
+    )
     mem_sub = p_mem.add_subparsers(dest="memory_command", required=True)
 
     p_mem_list = mem_sub.add_parser("list", help="List facts and knowledge graph summary")
