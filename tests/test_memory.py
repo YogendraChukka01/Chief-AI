@@ -92,6 +92,37 @@ def test_memory_forget_and_clear(tmp_path) -> None:
     assert mem.graph()["nodes"] == []
 
 
+def test_memory_import_export(tmp_path) -> None:
+    path1 = str(tmp_path / "mem1.json")
+    mem1 = MemoryAI(path=path1)
+    mem1.remember("k1", "v1", category="c1")
+    mem1.add_node("n1", "kind1", "label1")
+    mem1.link("n1", "n2", "rel1")
+
+    data = mem1.export_data()
+    assert data["facts"] == {"k1": "v1"}
+    assert data["categories"] == {"k1": "c1"}
+    assert len(data["nodes"]) == 1
+    assert len(data["edges"]) == 1
+
+    # Import into a new store (merge)
+    path2 = str(tmp_path / "mem2.json")
+    mem2 = MemoryAI(path=path2)
+    mem2.remember("k2", "v2", category="c2")
+    mem2.import_data(data, merge=True)
+
+    assert mem2.recall("k1") == "v1"
+    assert mem2.recall("k2") == "v2"
+    g = mem2.graph()
+    assert len(g["nodes"]) == 1
+
+    # Import with overwrite
+    mem2.import_data({"facts": {"k3": "v3"}, "categories": {"k3": "c3"}}, merge=False)
+    assert mem2.recall("k1") is None
+    assert mem2.recall("k2") is None
+    assert mem2.recall("k3") == "v3"
+
+
 def test_memory_graph_and_history(tmp_path) -> None:
     path = str(tmp_path / "graph.json")
     mem = MemoryAI(path=path)

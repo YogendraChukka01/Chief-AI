@@ -65,9 +65,15 @@ class MockExecutor(Executor):
 
 
 class ChiefAI:
-    def __init__(self, memory: MemoryAI | None = None, executor: Executor | None = None) -> None:
+    def __init__(
+        self,
+        memory: MemoryAI | None = None,
+        executor: Executor | None = None,
+        max_retries: int = 0,
+    ) -> None:
         self.memory = memory or MemoryAI()
         self.executor = executor or MockExecutor()
+        self.max_retries = max_retries
 
     # -- memory context ----------------------------------------------------
     def _memory_context(self, text: str, exclude: tuple[str, ...] = ()) -> str:
@@ -111,11 +117,28 @@ class ChiefAI:
 
         prompt = "\n\n".join(prompt_parts)
 
-        try:
-            content = self.executor.run(task.sub_agent, prompt)
-            status = TaskStatus.SUCCESS
-        except Exception as err:
-            content = f"Error executing task {task.id}: {err}"
+        attempts = 0
+        last_error: Exception | None = None
+        status = TaskStatus.FAILED
+        content = ""
+        while attempts <= self.max_retries:
+            current_prompt = prompt
+            if attempts > 0 and last_error is not None:
+                current_prompt += (
+                    f"\n\n## Retry Feedback (Attempt {attempts}/{self.max_retries})\n"
+                    f"Previous execution failed with error: {last_error}\n"
+                    f"Please adjust your approach and correct the error."
+                )
+            try:
+                content = self.executor.run(task.sub_agent, current_prompt)
+                status = TaskStatus.SUCCESS
+                break
+            except Exception as err:
+                last_error = err
+                attempts += 1
+
+        if status != TaskStatus.SUCCESS:
+            content = f"Error executing task {task.id}: {last_error}"
             status = TaskStatus.FAILED
 
         self.memory.log_event(f"result:{task.id}", content)
