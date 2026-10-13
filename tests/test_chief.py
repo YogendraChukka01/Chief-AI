@@ -113,3 +113,33 @@ def test_result_status_tracking() -> None:
     assert res.status == TaskStatus.FAILED
     assert "Error executing task" in res.content
     assert "LLM connection failed" in res.content
+
+
+def test_chief_dispatch_retries_and_feedback() -> None:
+    from chief_ai.core.types import TaskStatus
+
+    prompts_seen = []
+
+    class RetryExecutor(Executor):
+        def __init__(self) -> None:
+            self.count = 0
+
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            prompts_seen.append(prompt)
+            self.count += 1
+            if self.count < 3:
+                raise RuntimeError(f"Failure attempt {self.count}")
+            return "Success on attempt 3"
+
+    executor = RetryExecutor()
+    chief = ChiefAI(executor=executor, max_retries=3)
+    plan = chief.plan("Refactor database schema")
+    res = chief.dispatch(plan.tasks[0])
+
+    assert res.status == TaskStatus.SUCCESS
+    assert res.content == "Success on attempt 3"
+    assert len(prompts_seen) == 3
+    assert "Retry Feedback (Attempt 1/3)" in prompts_seen[1]
+    assert "Failure attempt 1" in prompts_seen[1]
+    assert "Retry Feedback (Attempt 2/3)" in prompts_seen[2]
+    assert "Failure attempt 2" in prompts_seen[2]

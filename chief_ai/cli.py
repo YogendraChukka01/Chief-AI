@@ -119,6 +119,29 @@ def _cmd_memory_clear(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_memory_export(args: argparse.Namespace) -> int:
+    mem = MemoryAI(path=args.path)
+    data = mem.export_data()
+    os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+    with open(args.output, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2)
+    print(f"Exported memory to '{args.output}'.")
+    return 0
+
+
+def _cmd_memory_import(args: argparse.Namespace) -> int:
+    if not os.path.exists(args.file):
+        print(f"Error: Import file '{args.file}' not found.")
+        return 1
+    with open(args.file, encoding="utf-8") as fh:
+        data = json.load(fh)
+    mem = MemoryAI(path=args.path)
+    mem.import_data(data, merge=not args.overwrite)
+    mode = "Overwrote" if args.overwrite else "Merged"
+    print(f"{mode} memory store ({mem.path}) from '{args.file}'.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="chief", description="Chief AI orchestrator CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -148,7 +171,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.set_defaults(func=_cmd_serve)
 
     p_mem = sub.add_parser("memory", help="Inspect or manage Chief AI persistent memory")
-    p_mem.add_argument("--path", default=".chief_memory/memory.json", help="Path to memory store file")
+    p_mem.add_argument(
+        "--path", default=".chief_memory/memory.json", help="Path to memory store file"
+    )
     mem_sub = p_mem.add_subparsers(dest="memory_command", required=True)
 
     p_mem_list = mem_sub.add_parser("list", help="List facts and knowledge graph summary")
@@ -160,6 +185,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_mem_clear = mem_sub.add_parser("clear", help="Clear all stored memory")
     p_mem_clear.set_defaults(func=_cmd_memory_clear)
+
+    p_mem_export = mem_sub.add_parser("export", help="Export memory to a JSON file")
+    p_mem_export.add_argument("output", help="Path to output JSON file")
+    p_mem_export.set_defaults(func=_cmd_memory_export)
+
+    p_mem_import = mem_sub.add_parser("import", help="Import memory from a JSON file")
+    p_mem_import.add_argument("file", help="Path to JSON file to import")
+    p_mem_import.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing memory instead of merging",
+    )
+    p_mem_import.set_defaults(func=_cmd_memory_import)
 
     return parser
 
