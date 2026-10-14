@@ -54,10 +54,12 @@ INDEX_HTML = """<!doctype html>
   .task.pending { border-left-color:var(--pending); }
   .task.running { border-left-color:var(--run); }
   .task.done { border-left-color:var(--done); }
+  .task.failed { border-left-color:#f85149; }
   .badge { float:right; font-size:11px; padding:2px 8px; border-radius:999px;
         background:#21262d; color:var(--muted); }
   .task.running .badge { background:var(--run); color:#0d1117; }
   .task.done .badge { background:var(--done); color:#0d1117; }
+  .task.failed .badge { background:#f85149; color:#ffffff; }
   .task pre { white-space:pre-wrap; word-break:break-word; margin:8px 0 0; color:var(--fg); }
   #result { white-space:pre-wrap; }
   .hint { color:var(--muted); font-size:12px; }
@@ -122,9 +124,10 @@ INDEX_HTML = """<!doctype html>
     el.innerHTML = ids.map(id => {
       const t = taskState[id];
       const cls = t.status;
-      const label = t.status === "running" ? "running" : t.status === "done" ? "done" : "pending";
+      const durationStr = t.duration !== undefined ? ` (${t.duration}s)` : "";
+      const label = (t.status || "pending") + durationStr;
       const body = t.content ? `<pre>${escapeHtml(t.content)}</pre>` : "";
-      return `<div class="task ${cls}"><span class="badge">${label}</span>
+      return `<div class="task ${cls}"><span class="badge">${escapeHtml(label)}</span>
         <div class="name">${escapeHtml(t.name)}</div>
         <div class="dept">${escapeHtml(t.department||"")}</div>${body}</div>`;
     }).join("");
@@ -171,8 +174,9 @@ INDEX_HTML = """<!doctype html>
         if(taskState[e.task_id]){ taskState[e.task_id].status = "running"; renderTasks(); }
       } else if(e.type === "task_done"){
         if(taskState[e.task_id]){
-          taskState[e.task_id].status = "done";
+          taskState[e.task_id].status = e.status || "done";
           taskState[e.task_id].content = e.content;
+          taskState[e.task_id].duration = e.duration_seconds;
           renderTasks();
         }
       } else if(e.type === "done"){

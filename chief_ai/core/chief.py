@@ -14,6 +14,7 @@ tasks can be executed in parallel with dependency-aware scheduling.
 
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -44,8 +45,7 @@ class Executor(ABC):
     """Runs a single sub-agent task and returns its output."""
 
     @abstractmethod
-    def run(self, sub_agent_id: str, prompt: str) -> str:
-        ...
+    def run(self, sub_agent_id: str, prompt: str) -> str: ...
 
 
 class MockExecutor(Executor):
@@ -65,9 +65,15 @@ class MockExecutor(Executor):
 
 
 class ChiefAI:
-    def __init__(self, memory: MemoryAI | None = None, executor: Executor | None = None) -> None:
+    def __init__(
+        self,
+        memory: MemoryAI | None = None,
+        executor: Executor | None = None,
+        max_retries: int = 0,
+    ) -> None:
         self.memory = memory or MemoryAI()
         self.executor = executor or MockExecutor()
+        self.max_retries = max_retries
 
     # -- memory context ----------------------------------------------------
     def _memory_context(self, text: str, exclude: tuple[str, ...] = ()) -> str:
@@ -111,12 +117,21 @@ class ChiefAI:
 
         prompt = "\n\n".join(prompt_parts)
 
-        try:
-            content = self.executor.run(task.sub_agent, prompt)
-            status = TaskStatus.SUCCESS
-        except Exception as err:
-            content = f"Error executing task {task.id}: {err}"
-            status = TaskStatus.FAILED
+        start_time = time.perf_counter()
+        attempts = 0
+        status = TaskStatus.FAILED
+        content = ""
+
+        while attempts <= self.max_retries:
+            attempts += 1
+            try:
+                content = self.executor.run(task.sub_agent, prompt)
+                status = TaskStatus.SUCCESS
+                break
+            except Exception as err:
+                content = f"Error executing task {task.id}: {err}"
+
+        duration_seconds = round(time.perf_counter() - start_time, 3)
 
         self.memory.log_event(f"result:{task.id}", content)
         self.memory.log_event("dispatch", f"{task.id} -> {agent.id}")
@@ -125,6 +140,7 @@ class ChiefAI:
             sub_agent=task.sub_agent,
             content=content,
             status=status,
+            duration_seconds=duration_seconds,
         )
 
     # -- scheduling --------------------------------------------------------
@@ -135,19 +151,13 @@ class ChiefAI:
         results: dict[str, Result] = {}
 
         while pending:
-            ready = [
-                t
-                for t in pending.values()
-                if all(d in done for d in t.dependencies)
-            ]
+            ready = [t for t in pending.values() if all(d in done for d in t.dependencies)]
             if not ready:
                 # No task is ready but work remains -> break cycles defensively.
                 ready = list(pending.values())
 
             with ThreadPoolExecutor(max_workers=min(len(ready), 8)) as ex:
-                futures = {
-                    ex.submit(self.dispatch, t, list(results.values())): t.id for t in ready
-                }
+                futures = {ex.submit(self.dispatch, t, list(results.values())): t.id for t in ready}
                 for fut in futures:
                     res = fut.result()
                     results[res.task_id] = res
@@ -205,6 +215,8 @@ class ChiefAI:
                     "task_id": task.id,
                     "sub_agent": task.sub_agent,
                     "content": res.content,
+                    "status": res.status,
+                    "duration_seconds": res.duration_seconds,
                 }
 
         yield {"type": "done", "result": self.synthesize(plan, list(results.values()))}
@@ -219,9 +231,7 @@ class ChiefAI:
             for t in ready:
                 yield {"type": "task_start", "task_id": t.id, "sub_agent": t.sub_agent}
             with ThreadPoolExecutor(max_workers=min(len(ready), 8)) as ex:
-                futures = {
-                    ex.submit(self.dispatch, t, list(results.values())): t.id for t in ready
-                }
+                futures = {ex.submit(self.dispatch, t, list(results.values())): t.id for t in ready}
                 for fut in futures:
                     res = fut.result()
                     results[res.task_id] = res
@@ -234,6 +244,8 @@ class ChiefAI:
                         "task_id": res.task_id,
                         "sub_agent": res.sub_agent,
                         "content": res.content,
+                        "status": res.status,
+                        "duration_seconds": res.duration_seconds,
                     }
 
     # -- full pipeline -----------------------------------------------------

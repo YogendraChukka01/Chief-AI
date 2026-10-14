@@ -113,3 +113,32 @@ def test_result_status_tracking() -> None:
     assert res.status == TaskStatus.FAILED
     assert "Error executing task" in res.content
     assert "LLM connection failed" in res.content
+
+
+def test_dispatch_tracks_duration_seconds() -> None:
+    chief = ChiefAI(executor=MockExecutor())
+    plan = chief.plan("Build a mobile app")
+    res = chief.dispatch(plan.tasks[0])
+    assert isinstance(res.duration_seconds, float)
+    assert res.duration_seconds >= 0.0
+
+
+def test_dispatch_retries_on_failure() -> None:
+    from chief_ai.core.types import TaskStatus
+
+    attempts = 0
+
+    class RetryableExecutor(Executor):
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise RuntimeError("Transient connection reset")
+            return "Recovered after retry!"
+
+    chief = ChiefAI(executor=RetryableExecutor(), max_retries=2)
+    plan = chief.plan("Fix a bug in backend")
+    res = chief.dispatch(plan.tasks[0])
+    assert res.status == TaskStatus.SUCCESS
+    assert res.content == "Recovered after retry!"
+    assert attempts == 2

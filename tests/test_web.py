@@ -65,7 +65,11 @@ def test_web_run_sse_streams_events() -> None:
         events = [json.loads(line[6:]) for line in raw.split("\n\n") if line.startswith("data: ")]
         assert events[0]["type"] == "plan"
         assert events[-1]["type"] == "done"
-        assert any(e["type"] == "task_done" for e in events)
+        task_dones = [e for e in events if e["type"] == "task_done"]
+        assert len(task_dones) > 0
+        for td in task_dones:
+            assert "duration_seconds" in td
+            assert "status" in td
     finally:
         server.shutdown()
         t.join(timeout=2)
