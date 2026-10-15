@@ -65,9 +65,15 @@ class MockExecutor(Executor):
 
 
 class ChiefAI:
-    def __init__(self, memory: MemoryAI | None = None, executor: Executor | None = None) -> None:
+    def __init__(
+        self,
+        memory: MemoryAI | None = None,
+        executor: Executor | None = None,
+        max_retries: int = 0,
+    ) -> None:
         self.memory = memory or MemoryAI()
         self.executor = executor or MockExecutor()
+        self.max_retries = max_retries
 
     # -- memory context ----------------------------------------------------
     def _memory_context(self, text: str, exclude: tuple[str, ...] = ()) -> str:
@@ -83,7 +89,12 @@ class ChiefAI:
         return Plan(goal=goal, tasks=decompose(goal))
 
     # -- dispatch ----------------------------------------------------------
-    def dispatch(self, task: Task, upstream_results: list[Result] | None = None) -> Result:
+    def dispatch(
+        self,
+        task: Task,
+        upstream_results: list[Result] | None = None,
+        max_retries: int | None = None,
+    ) -> Result:
         if not task.sub_agent:
             raise ValueError("Task has no assigned sub-agent")
         agent = get_sub_agent(task.sub_agent)
@@ -109,22 +120,44 @@ class ChiefAI:
         if ctx:
             prompt_parts.append(ctx)
 
-        prompt = "\n\n".join(prompt_parts)
+        base_prompt = "\n\n".join(prompt_parts)
+        retries = max_retries if max_retries is not None else self.max_retries
+        attempts = 0
+        current_prompt = base_prompt
+        last_content = ""
+        status = TaskStatus.FAILED
 
-        try:
-            content = self.executor.run(task.sub_agent, prompt)
-            status = TaskStatus.SUCCESS
-        except Exception as err:
-            content = f"Error executing task {task.id}: {err}"
-            status = TaskStatus.FAILED
+        while attempts <= retries:
+            attempts += 1
+            try:
+                content = self.executor.run(task.sub_agent, current_prompt)
+                if "execution failed" in content.lower():
+                    status = TaskStatus.FAILED
+                else:
+                    status = TaskStatus.SUCCESS
+            except Exception as err:
+                content = f"Error executing task {task.id}: {err}"
+                status = TaskStatus.FAILED
 
-        self.memory.log_event(f"result:{task.id}", content)
-        self.memory.log_event("dispatch", f"{task.id} -> {agent.id}")
+            last_content = content
+            if status == TaskStatus.SUCCESS or attempts > retries:
+                break
+
+            feedback = (
+                f"## Error Feedback (Attempt {attempts} Failed)\n"
+                f"The previous attempt failed with output:\n{last_content}\n\n"
+                f"Please analyze the failure and provide a corrected, complete response."
+            )
+            current_prompt = f"{base_prompt}\n\n{feedback}"
+
+        self.memory.log_event(f"result:{task.id}", last_content)
+        self.memory.log_event("dispatch", f"{task.id} -> {agent.id} (attempts: {attempts})")
         return Result(
             task_id=task.id,
             sub_agent=task.sub_agent,
-            content=content,
+            content=last_content,
             status=status,
+            metadata={"attempts": str(attempts)},
         )
 
     # -- scheduling --------------------------------------------------------

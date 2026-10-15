@@ -54,3 +54,10 @@ def test_cli_memory_clear(tmp_path, capsys) -> None:
     mem_check = MemoryAI(path=mem_path)
     assert mem_check.recall("k1") is None
     assert mem_check.recall("k2") is None
+
+
+def test_cli_run_max_retries(capsys) -> None:
+    ret = main(["run", "Build a portfolio", "--max-retries", "2"])
+    assert ret == 0
+    captured = capsys.readouterr().out
+    assert "Chief AI — Integrated Result" in captured

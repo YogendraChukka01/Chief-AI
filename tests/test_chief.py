@@ -113,3 +113,51 @@ def test_result_status_tracking() -> None:
     assert res.status == TaskStatus.FAILED
     assert "Error executing task" in res.content
     assert "LLM connection failed" in res.content
+
+
+def test_retry_recovers_on_subsequent_attempt() -> None:
+    from chief_ai.core.types import TaskStatus
+
+    class FlakyExecutor(Executor):
+        def __init__(self) -> None:
+            self.calls = 0
+            self.prompts: list[str] = []
+
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            self.calls += 1
+            self.prompts.append(prompt)
+            if self.calls == 1:
+                return "execution failed: network timeout"
+            return "recovered successfully on retry"
+
+    executor = FlakyExecutor()
+    chief = ChiefAI(executor=executor, max_retries=2)
+    plan = chief.plan("Fix a bug in backend")
+    res = chief.dispatch(plan.tasks[0])
+
+    assert res.status == TaskStatus.SUCCESS
+    assert res.content == "recovered successfully on retry"
+    assert res.metadata["attempts"] == "2"
+    assert executor.calls == 2
+    assert "Error Feedback (Attempt 1 Failed)" in executor.prompts[1]
+
+
+def test_retry_stops_at_max_retries() -> None:
+    from chief_ai.core.types import TaskStatus
+
+    class AlwaysFailingExecutor(Executor):
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            self.calls += 1
+            raise RuntimeError("permanent failure")
+
+    executor = AlwaysFailingExecutor()
+    chief = ChiefAI(executor=executor, max_retries=2)
+    plan = chief.plan("Fix a bug in backend")
+    res = chief.dispatch(plan.tasks[0])
+
+    assert res.status == TaskStatus.FAILED
+    assert res.metadata["attempts"] == "3"
+    assert executor.calls == 3
