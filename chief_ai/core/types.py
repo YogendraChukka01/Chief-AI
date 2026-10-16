@@ -83,3 +83,4 @@ class Result:
     content: str
     status: TaskStatus = TaskStatus.SUCCESS
     metadata: dict[str, str] = field(default_factory=dict)
+    duration_seconds: float | None = None

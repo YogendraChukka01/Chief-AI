@@ -14,6 +14,7 @@ tasks can be executed in parallel with dependency-aware scheduling.
 
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -111,12 +112,14 @@ class ChiefAI:
 
         prompt = "\n\n".join(prompt_parts)
 
+        start_time = time.perf_counter()
         try:
             content = self.executor.run(task.sub_agent, prompt)
             status = TaskStatus.SUCCESS
         except Exception as err:
             content = f"Error executing task {task.id}: {err}"
             status = TaskStatus.FAILED
+        duration = round(time.perf_counter() - start_time, 3)
 
         self.memory.log_event(f"result:{task.id}", content)
         self.memory.log_event("dispatch", f"{task.id} -> {agent.id}")
@@ -125,6 +128,7 @@ class ChiefAI:
             sub_agent=task.sub_agent,
             content=content,
             status=status,
+            duration_seconds=duration,
         )
 
     # -- scheduling --------------------------------------------------------
@@ -205,6 +209,7 @@ class ChiefAI:
                     "task_id": task.id,
                     "sub_agent": task.sub_agent,
                     "content": res.content,
+                    "duration_seconds": res.duration_seconds,
                 }
 
         yield {"type": "done", "result": self.synthesize(plan, list(results.values()))}
@@ -234,6 +239,7 @@ class ChiefAI:
                         "task_id": res.task_id,
                         "sub_agent": res.sub_agent,
                         "content": res.content,
+                        "duration_seconds": res.duration_seconds,
                     }
 
     # -- full pipeline -----------------------------------------------------

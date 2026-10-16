@@ -113,3 +113,19 @@ def test_result_status_tracking() -> None:
     assert res.status == TaskStatus.FAILED
     assert "Error executing task" in res.content
     assert "LLM connection failed" in res.content
+
+
+def test_task_duration_seconds_tracking() -> None:
+    chief = ChiefAI(executor=MockExecutor())
+    plan = chief.plan("Fix a bug in backend")
+    res = chief.dispatch(plan.tasks[0])
+    assert res.duration_seconds is not None
+    assert isinstance(res.duration_seconds, float)
+    assert res.duration_seconds >= 0.0
+
+    events = list(chief.stream("Fix a bug in backend"))
+    task_done_events = [e for e in events if e["type"] == "task_done"]
+    assert len(task_done_events) > 0
+    for e in task_done_events:
+        assert "duration_seconds" in e
+        assert isinstance(e["duration_seconds"], float)

@@ -46,7 +46,10 @@ def test_web_plan_and_index_endpoints() -> None:
 
         with urllib.request.urlopen(f"{base}/") as r:
             assert r.status == 200
-            assert b"Chief AI" in r.read()
+            content = r.read()
+            assert b"Chief AI" in content
+            assert b"mTotal" in content
+            assert b"taskSearch" in content
     finally:
         server.shutdown()
         t.join(timeout=2)
@@ -65,7 +68,10 @@ def test_web_run_sse_streams_events() -> None:
         events = [json.loads(line[6:]) for line in raw.split("\n\n") if line.startswith("data: ")]
         assert events[0]["type"] == "plan"
         assert events[-1]["type"] == "done"
-        assert any(e["type"] == "task_done" for e in events)
+        done_events = [e for e in events if e["type"] == "task_done"]
+        assert len(done_events) > 0
+        for e in done_events:
+            assert "duration_seconds" in e
     finally:
         server.shutdown()
         t.join(timeout=2)
