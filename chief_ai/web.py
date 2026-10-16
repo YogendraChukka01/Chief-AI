@@ -61,6 +61,14 @@ INDEX_HTML = """<!doctype html>
   .task pre { white-space:pre-wrap; word-break:break-word; margin:8px 0 0; color:var(--fg); }
   #result { white-space:pre-wrap; }
   .hint { color:var(--muted); font-size:12px; }
+  .metrics { display:flex; gap:12px; font-size:12px; color:var(--muted); margin-bottom:10px; }
+  .metrics b { color:var(--fg); }
+  .filter-box { margin-bottom:10px; }
+  .filter-box input {
+    width:100%; font-size:12px; padding:6px 9px;
+    border-radius:6px; border:1px solid #30363d;
+    background:#0d1117; color:var(--fg);
+  }
 </style>
 </head>
 <body>
@@ -82,6 +90,15 @@ INDEX_HTML = """<!doctype html>
   </div>
   <div class="panel">
     <h2>Tasks</h2>
+    <div class="metrics">
+      <span>Total: <b id="mTotal">0</b></span>
+      <span>Pending: <b id="mPending">0</b></span>
+      <span>Running: <b id="mRunning">0</b></span>
+      <span>Done: <b id="mDone">0</b></span>
+    </div>
+    <div class="filter-box">
+      <input type="text" id="taskSearch" placeholder="Filter tasks by name or department..." />
+    </div>
     <div id="tasks"><span class="hint">No tasks yet.</span></div>
   </div>
 </main>
@@ -118,11 +135,42 @@ INDEX_HTML = """<!doctype html>
   function renderTasks(){
     const el = $("tasks");
     const ids = Object.keys(taskState);
+
+    let total = ids.length, pending = 0, running = 0, done = 0;
+    ids.forEach(id => {
+      const st = taskState[id].status;
+      if(st === "running") running++;
+      else if(st === "done") done++;
+      else pending++;
+    });
+    if($("mTotal")) $("mTotal").textContent = total;
+    if($("mPending")) $("mPending").textContent = pending;
+    if($("mRunning")) $("mRunning").textContent = running;
+    if($("mDone")) $("mDone").textContent = done;
+
     if(!ids.length){ el.innerHTML = '<span class="hint">No tasks yet.</span>'; return; }
-    el.innerHTML = ids.map(id => {
+
+    const query = ($("taskSearch") ? $("taskSearch").value : "").toLowerCase().trim();
+    const filteredIds = ids.filter(id => {
+      if(!query) return true;
+      const t = taskState[id];
+      const matchName = (t.name||"").toLowerCase().includes(query);
+      const matchDept = (t.department||"").toLowerCase().includes(query);
+      return matchName || matchDept;
+    });
+
+    if(!filteredIds.length){
+      el.innerHTML = '<span class="hint">No matching tasks found.</span>';
+      return;
+    }
+
+    el.innerHTML = filteredIds.map(id => {
       const t = taskState[id];
       const cls = t.status;
-      const label = t.status === "running" ? "running" : t.status === "done" ? "done" : "pending";
+      let label = t.status === "running" ? "running" : t.status === "done" ? "done" : "pending";
+      if(t.status === "done" && t.duration !== undefined && t.duration !== null){
+        label += ` (${t.duration}s)`;
+      }
       const body = t.content ? `<pre>${escapeHtml(t.content)}</pre>` : "";
       return `<div class="task ${cls}"><span class="badge">${label}</span>
         <div class="name">${escapeHtml(t.name)}</div>
@@ -173,6 +221,7 @@ INDEX_HTML = """<!doctype html>
         if(taskState[e.task_id]){
           taskState[e.task_id].status = "done";
           taskState[e.task_id].content = e.content;
+          taskState[e.task_id].duration = e.duration_seconds;
           renderTasks();
         }
       } else if(e.type === "done"){
@@ -184,6 +233,7 @@ INDEX_HTML = """<!doctype html>
   $("planBtn").onclick = showPlan;
   $("runBtn").onclick = runLive;
   $("goal").addEventListener("keydown", e => { if(e.key === "Enter") showPlan(); });
+  if($("taskSearch")){ $("taskSearch").addEventListener("input", renderTasks); }
 </script>
 </body>
 </html>
