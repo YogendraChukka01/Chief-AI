@@ -102,7 +102,10 @@ class MemoryAI:
             cur = conn.cursor()
 
             # Facts table
-            cur.execute("CREATE TABLE IF NOT EXISTS facts (key TEXT PRIMARY KEY, value TEXT, category TEXT)")
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS facts "
+                "(key TEXT PRIMARY KEY, value TEXT, category TEXT)"
+            )
             cur.execute("SELECT key, value, category FROM facts")
             for k, v, cat in cur.fetchall():
                 self._state.facts[k] = v
@@ -110,17 +113,26 @@ class MemoryAI:
                     self._state.categories[k] = cat
 
             # History table
-            cur.execute("CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT)")
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS history "
+                "(id INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT)"
+            )
             cur.execute("SELECT payload FROM history ORDER BY id ASC")
             self._state.history = [json.loads(row[0]) for row in cur.fetchall()]
 
             # Nodes table
-            cur.execute("CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, kind TEXT, label TEXT)")
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS nodes "
+                "(id TEXT PRIMARY KEY, kind TEXT, label TEXT)"
+            )
             cur.execute("SELECT id, kind, label FROM nodes")
             self._state.nodes = {r[0]: _GraphNode(r[0], r[1], r[2]) for r in cur.fetchall()}
 
             # Edges table
-            cur.execute("CREATE TABLE IF NOT EXISTS edges (src TEXT, dst TEXT, relation TEXT)")
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS edges "
+                "(src TEXT, dst TEXT, relation TEXT)"
+            )
             cur.execute("SELECT src, dst, relation FROM edges")
             self._state.edges = [_GraphEdge(r[0], r[1], r[2]) for r in cur.fetchall()]
 
@@ -133,29 +145,81 @@ class MemoryAI:
         conn = sqlite3.connect(self.path)
         cur = conn.cursor()
 
-        cur.execute("CREATE TABLE IF NOT EXISTS facts (key TEXT PRIMARY KEY, value TEXT, category TEXT)")
+        cur.execute(
+            "CREATE TABLE IF NOT EXISTS facts "
+            "(key TEXT PRIMARY KEY, value TEXT, category TEXT)"
+        )
         cur.execute("DELETE FROM facts")
         for k, v in self._state.facts.items():
             cat = self._state.categories.get(k)
             cur.execute("INSERT INTO facts (key, value, category) VALUES (?, ?, ?)", (k, v, cat))
 
-        cur.execute("CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT)")
+        cur.execute(
+            "CREATE TABLE IF NOT EXISTS history "
+            "(id INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT)"
+        )
         cur.execute("DELETE FROM history")
         for h in self._state.history:
             cur.execute("INSERT INTO history (payload) VALUES (?)", (json.dumps(h),))
 
-        cur.execute("CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, kind TEXT, label TEXT)")
+        cur.execute(
+            "CREATE TABLE IF NOT EXISTS nodes "
+            "(id TEXT PRIMARY KEY, kind TEXT, label TEXT)"
+        )
         cur.execute("DELETE FROM nodes")
         for node in self._state.nodes.values():
-            cur.execute("INSERT INTO nodes (id, kind, label) VALUES (?, ?, ?)", (node.id, node.kind, node.label))
+            cur.execute(
+                "INSERT INTO nodes (id, kind, label) VALUES (?, ?, ?)",
+                (node.id, node.kind, node.label),
+            )
 
-        cur.execute("CREATE TABLE IF NOT EXISTS edges (src TEXT, dst TEXT, relation TEXT)")
+        cur.execute(
+            "CREATE TABLE IF NOT EXISTS edges "
+            "(src TEXT, dst TEXT, relation TEXT)"
+        )
         cur.execute("DELETE FROM edges")
         for edge in self._state.edges:
-            cur.execute("INSERT INTO edges (src, dst, relation) VALUES (?, ?, ?)", (edge.src, edge.dst, edge.relation))
+            cur.execute(
+                "INSERT INTO edges (src, dst, relation) VALUES (?, ?, ?)",
+                (edge.src, edge.dst, edge.relation),
+            )
 
         conn.commit()
         conn.close()
+
+    # -- export / import ---------------------------------------------------
+    def export_data(self) -> dict:
+        return {
+            "facts": dict(self._state.facts),
+            "categories": dict(self._state.categories),
+            "history": list(self._state.history),
+            "nodes": {k: vars(v) for k, v in self._state.nodes.items()},
+            "edges": [vars(e) for e in self._state.edges],
+        }
+
+    def import_data(self, data: dict, merge: bool = True) -> None:
+        if not merge:
+            self._state = _MemoryState()
+
+        raw_facts = data.get("facts", {})
+        raw_categories = data.get("categories", {})
+        raw_history = data.get("history", [])
+        raw_nodes = data.get("nodes", {})
+        raw_edges = data.get("edges", [])
+
+        self._state.facts.update(raw_facts)
+        self._state.categories.update(raw_categories)
+        self._state.history.extend(raw_history)
+        for k, v in raw_nodes.items():
+            if isinstance(v, dict):
+                self._state.nodes[k] = _GraphNode(**v)
+        for e in raw_edges:
+            if isinstance(e, dict):
+                edge = _GraphEdge(**e)
+                if edge not in self._state.edges:
+                    self._state.edges.append(edge)
+
+        self.save()
 
     # -- long-term memory --------------------------------------------------
     def remember(self, key: str, value: str, category: str | None = None) -> None:

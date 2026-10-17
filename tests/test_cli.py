@@ -54,3 +54,45 @@ def test_cli_memory_clear(tmp_path, capsys) -> None:
     mem_check = MemoryAI(path=mem_path)
     assert mem_check.recall("k1") is None
     assert mem_check.recall("k2") is None
+
+
+def test_cli_memory_remember_query_history_export_import(tmp_path, capsys) -> None:
+    mem_path = str(tmp_path / "memory.json")
+    export_path = str(tmp_path / "export.json")
+    import_target_path = str(tmp_path / "imported_memory.json")
+
+    # Remember
+    ret = main([
+        "memory", "--path", mem_path, "remember", "framework", "pydantic-ai", "--category", "core"
+    ])
+    assert ret == 0
+    captured = capsys.readouterr().out
+    assert "Stored fact 'framework' in category 'core' in memory." in captured
+
+    # Query
+    ret = main(["memory", "--path", mem_path, "query", "pydantic"])
+    assert ret == 0
+    captured = capsys.readouterr().out
+    assert "Memory query for 'pydantic' returned 1 match(es):" in captured
+    assert "framework: pydantic-ai" in captured
+
+    # History
+    ret = main(["memory", "--path", mem_path, "history"])
+    assert ret == 0
+    captured = capsys.readouterr().out
+    assert "Memory history" in captured
+
+    # Export
+    ret = main(["memory", "--path", mem_path, "export", export_path])
+    assert ret == 0
+    captured = capsys.readouterr().out
+    assert f"Exported memory store data to '{export_path}'." in captured
+
+    # Import into a new store
+    ret = main(["memory", "--path", import_target_path, "import", export_path])
+    assert ret == 0
+    captured = capsys.readouterr().out
+    assert f"Merged memory store data from '{export_path}'." in captured
+
+    mem_imported = MemoryAI(path=import_target_path)
+    assert mem_imported.recall("framework") == "pydantic-ai"
