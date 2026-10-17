@@ -77,9 +77,7 @@ class MemoryAI:
         self._state.facts = raw.get("facts", {})
         self._state.categories = raw.get("categories", {})
         self._state.history = raw.get("history", [])
-        self._state.nodes = {
-            k: _GraphNode(**v) for k, v in raw.get("nodes", {}).items()
-        }
+        self._state.nodes = {k: _GraphNode(**v) for k, v in raw.get("nodes", {}).items()}
         self._state.edges = [_GraphEdge(**e) for e in raw.get("edges", [])]
 
     def _save_json(self) -> None:
@@ -103,8 +101,7 @@ class MemoryAI:
 
             # Facts table
             cur.execute(
-                "CREATE TABLE IF NOT EXISTS facts "
-                "(key TEXT PRIMARY KEY, value TEXT, category TEXT)"
+                "CREATE TABLE IF NOT EXISTS facts (key TEXT PRIMARY KEY, value TEXT, category TEXT)"
             )
             cur.execute("SELECT key, value, category FROM facts")
             for k, v, cat in cur.fetchall():
@@ -122,17 +119,13 @@ class MemoryAI:
 
             # Nodes table
             cur.execute(
-                "CREATE TABLE IF NOT EXISTS nodes "
-                "(id TEXT PRIMARY KEY, kind TEXT, label TEXT)"
+                "CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, kind TEXT, label TEXT)"
             )
             cur.execute("SELECT id, kind, label FROM nodes")
             self._state.nodes = {r[0]: _GraphNode(r[0], r[1], r[2]) for r in cur.fetchall()}
 
             # Edges table
-            cur.execute(
-                "CREATE TABLE IF NOT EXISTS edges "
-                "(src TEXT, dst TEXT, relation TEXT)"
-            )
+            cur.execute("CREATE TABLE IF NOT EXISTS edges (src TEXT, dst TEXT, relation TEXT)")
             cur.execute("SELECT src, dst, relation FROM edges")
             self._state.edges = [_GraphEdge(r[0], r[1], r[2]) for r in cur.fetchall()]
 
@@ -146,8 +139,7 @@ class MemoryAI:
         cur = conn.cursor()
 
         cur.execute(
-            "CREATE TABLE IF NOT EXISTS facts "
-            "(key TEXT PRIMARY KEY, value TEXT, category TEXT)"
+            "CREATE TABLE IF NOT EXISTS facts (key TEXT PRIMARY KEY, value TEXT, category TEXT)"
         )
         cur.execute("DELETE FROM facts")
         for k, v in self._state.facts.items():
@@ -162,10 +154,7 @@ class MemoryAI:
         for h in self._state.history:
             cur.execute("INSERT INTO history (payload) VALUES (?)", (json.dumps(h),))
 
-        cur.execute(
-            "CREATE TABLE IF NOT EXISTS nodes "
-            "(id TEXT PRIMARY KEY, kind TEXT, label TEXT)"
-        )
+        cur.execute("CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, kind TEXT, label TEXT)")
         cur.execute("DELETE FROM nodes")
         for node in self._state.nodes.values():
             cur.execute(
@@ -173,10 +162,7 @@ class MemoryAI:
                 (node.id, node.kind, node.label),
             )
 
-        cur.execute(
-            "CREATE TABLE IF NOT EXISTS edges "
-            "(src TEXT, dst TEXT, relation TEXT)"
-        )
+        cur.execute("CREATE TABLE IF NOT EXISTS edges (src TEXT, dst TEXT, relation TEXT)")
         cur.execute("DELETE FROM edges")
         for edge in self._state.edges:
             cur.execute(
@@ -236,9 +222,7 @@ class MemoryAI:
 
     def recall_by_category(self, category: str) -> dict[str, str]:
         return {
-            k: v
-            for k, v in self._state.facts.items()
-            if self._state.categories.get(k) == category
+            k: v for k, v in self._state.facts.items() if self._state.categories.get(k) == category
         }
 
     def forget(self, key: str) -> bool:

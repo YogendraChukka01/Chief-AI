@@ -62,9 +62,9 @@ def test_cli_memory_remember_query_history_export_import(tmp_path, capsys) -> No
     import_target_path = str(tmp_path / "imported_memory.json")
 
     # Remember
-    ret = main([
-        "memory", "--path", mem_path, "remember", "framework", "pydantic-ai", "--category", "core"
-    ])
+    ret = main(
+        ["memory", "--path", mem_path, "remember", "framework", "pydantic-ai", "--category", "core"]
+    )
     assert ret == 0
     captured = capsys.readouterr().out
     assert "Stored fact 'framework' in category 'core' in memory." in captured
