@@ -6,8 +6,13 @@ Usage:
     chief generate [--target .]
     chief list
     chief memory list
+    chief memory remember <key> <value> [--category CATEGORY]
+    chief memory query <query>
+    chief memory history
     chief memory forget <key>
     chief memory clear
+    chief memory export <filepath>
+    chief memory import <filepath> [--no-merge]
 """
 
 from __future__ import annotations
@@ -103,6 +108,32 @@ def _cmd_memory_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_memory_remember(args: argparse.Namespace) -> int:
+    mem = MemoryAI(path=args.path)
+    mem.remember(args.key, args.value, category=args.category)
+    cat_info = f" in category '{args.category}'" if args.category else ""
+    print(f"Stored fact '{args.key}'{cat_info} in memory.")
+    return 0
+
+
+def _cmd_memory_query(args: argparse.Namespace) -> int:
+    mem = MemoryAI(path=args.path)
+    hits = mem.retrieve(args.query, limit=args.limit)
+    print(f"Memory query for '{args.query}' returned {len(hits)} match(es):")
+    for hit in hits:
+        print(f"  - {hit}")
+    return 0
+
+
+def _cmd_memory_history(args: argparse.Namespace) -> int:
+    mem = MemoryAI(path=args.path)
+    hist = mem.history()
+    print(f"Memory history ({len(hist)} event(s)):")
+    for item in hist:
+        print(f"  - {item}")
+    return 0
+
+
 def _cmd_memory_forget(args: argparse.Namespace) -> int:
     mem = MemoryAI(path=args.path)
     if mem.forget(args.key):
@@ -116,6 +147,30 @@ def _cmd_memory_clear(args: argparse.Namespace) -> int:
     mem = MemoryAI(path=args.path)
     mem.clear()
     print(f"Cleared all memory from store ({mem.path}).")
+    return 0
+
+
+def _cmd_memory_export(args: argparse.Namespace) -> int:
+    mem = MemoryAI(path=args.path)
+    data = mem.export_data()
+    os.makedirs(os.path.dirname(args.filepath) or ".", exist_ok=True)
+    with open(args.filepath, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2)
+    print(f"Exported memory store data to '{args.filepath}'.")
+    return 0
+
+
+def _cmd_memory_import(args: argparse.Namespace) -> int:
+    mem = MemoryAI(path=args.path)
+    if not os.path.exists(args.filepath):
+        print(f"File not found: '{args.filepath}'")
+        return 1
+    with open(args.filepath, encoding="utf-8") as fh:
+        data = json.load(fh)
+    merge = not args.no_merge
+    mem.import_data(data, merge=merge)
+    action = "Merged" if merge else "Replaced"
+    print(f"{action} memory store data from '{args.filepath}'.")
     return 0
 
 
@@ -148,11 +203,27 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.set_defaults(func=_cmd_serve)
 
     p_mem = sub.add_parser("memory", help="Inspect or manage Chief AI persistent memory")
-    p_mem.add_argument("--path", default=".chief_memory/memory.json", help="Path to memory store file")
+    p_mem.add_argument(
+        "--path", default=".chief_memory/memory.json", help="Path to memory store file"
+    )
     mem_sub = p_mem.add_subparsers(dest="memory_command", required=True)
 
     p_mem_list = mem_sub.add_parser("list", help="List facts and knowledge graph summary")
     p_mem_list.set_defaults(func=_cmd_memory_list)
+
+    p_mem_rem = mem_sub.add_parser("remember", help="Store a fact in memory")
+    p_mem_rem.add_argument("key", help="Fact key")
+    p_mem_rem.add_argument("value", help="Fact value")
+    p_mem_rem.add_argument("--category", help="Optional category tag")
+    p_mem_rem.set_defaults(func=_cmd_memory_remember)
+
+    p_mem_query = mem_sub.add_parser("query", help="Query facts in memory")
+    p_mem_query.add_argument("query", help="Query text to search")
+    p_mem_query.add_argument("--limit", type=int, default=5, help="Max results")
+    p_mem_query.set_defaults(func=_cmd_memory_query)
+
+    p_mem_hist = mem_sub.add_parser("history", help="List memory event history")
+    p_mem_hist.set_defaults(func=_cmd_memory_history)
 
     p_mem_forget = mem_sub.add_parser("forget", help="Remove a fact from memory")
     p_mem_forget.add_argument("key", help="Fact key to remove")
@@ -160,6 +231,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_mem_clear = mem_sub.add_parser("clear", help="Clear all stored memory")
     p_mem_clear.set_defaults(func=_cmd_memory_clear)
+
+    p_mem_exp = mem_sub.add_parser("export", help="Export memory store to JSON file")
+    p_mem_exp.add_argument("filepath", help="Target JSON file path")
+    p_mem_exp.set_defaults(func=_cmd_memory_export)
+
+    p_mem_imp = mem_sub.add_parser("import", help="Import memory store from JSON file")
+    p_mem_imp.add_argument("filepath", help="Source JSON file path")
+    p_mem_imp.add_argument(
+        "--no-merge", action="store_true", help="Overwrite existing memory instead of merging"
+    )
+    p_mem_imp.set_defaults(func=_cmd_memory_import)
 
     return parser
 

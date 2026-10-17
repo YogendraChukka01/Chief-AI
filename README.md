@@ -176,6 +176,14 @@ chief generate
 
 # 7. Inspect the org chart
 chief list
+
+# 8. Manage persistent memory & context
+chief memory remember "framework" "pydantic-ai" --category core
+chief memory query "pydantic"
+chief memory history
+chief memory list
+chief memory export memory_backup.json
+chief memory import memory_backup.json
 ```
 
 After `chief generate`, open the project in opencode and switch to the **chief**

@@ -112,3 +112,40 @@ def test_memory_graph_and_history(tmp_path) -> None:
     hits = mem.retrieve("Chief")
     assert len(hits) == 1
     assert "agent_role: Chief AI assistant" in hits[0]
+
+
+def test_memory_export_import_data(tmp_path) -> None:
+    path1 = str(tmp_path / "mem1.json")
+    path2 = str(tmp_path / "mem2.json")
+
+    mem1 = MemoryAI(path=path1)
+    mem1.remember("lang", "Python", category="stack")
+    mem1.add_node("n1", "lang", "Python 3.10+")
+    mem1.link("n1", "n2", "uses")
+    mem1.log_event("init", "started project")
+
+    exported = mem1.export_data()
+    assert exported["facts"] == {"lang": "Python"}
+    assert exported["categories"] == {"lang": "stack"}
+    assert len(exported["nodes"]) == 1
+    assert len(exported["edges"]) == 1
+
+    mem2 = MemoryAI(path=path2)
+    mem2.remember("db", "SQLite")
+    mem2.import_data(exported, merge=True)
+
+    assert mem2.recall("lang") == "Python"
+    assert mem2.recall("db") == "SQLite"
+    assert len(mem2.graph()["nodes"]) == 1
+
+    # Overwrite import
+    exported_subset = {
+        "facts": {"override_key": "val"},
+        "categories": {},
+        "history": [],
+        "nodes": {},
+        "edges": [],
+    }
+    mem2.import_data(exported_subset, merge=False)
+    assert mem2.recall("override_key") == "val"
+    assert mem2.recall("lang") is None
