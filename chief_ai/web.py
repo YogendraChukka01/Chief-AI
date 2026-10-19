@@ -262,10 +262,10 @@ def _agent_name(sub_id: str | None) -> str:
 
 
 def make_server(
-    host: str = "127.0.0.1", port: int = 8000, use_opencode: bool = False
+    host: str = "127.0.0.1", port: int = 8000, use_opencode: bool = False, max_retries: int = 0
 ) -> ThreadingHTTPServer:
     executor = OpencodeRunner() if use_opencode else None
-    chief = ChiefAI(memory=MemoryAI(), executor=executor)
+    chief = ChiefAI(memory=MemoryAI(), executor=executor, max_retries=max_retries)
 
     class Handler(_Handler):
         pass

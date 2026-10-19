@@ -50,7 +50,7 @@ def _cmd_plan(args: argparse.Namespace) -> int:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     executor = OpencodeRunner() if args.opencode else MockExecutor()
-    chief = ChiefAI(executor=executor)
+    chief = ChiefAI(executor=executor, max_retries=args.max_retries)
     print(chief.execute(args.goal, parallel=args.parallel))
     return 0
 
@@ -73,7 +73,9 @@ def _cmd_list(args: argparse.Namespace) -> int:
 
 
 def _cmd_serve(args: argparse.Namespace) -> int:
-    server = make_server(host=args.host, port=args.port, use_opencode=args.opencode)
+    server = make_server(
+        host=args.host, port=args.port, use_opencode=args.opencode, max_retries=args.max_retries
+    )
     url = f"http://{args.host}:{args.port}/"
     print(f"Chief AI web UI running at {url}  (Ctrl+C to stop)")
     try:
@@ -132,6 +134,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("goal")
     p_run.add_argument("--opencode", action="store_true", help="Use real opencode sub-agents")
     p_run.add_argument("--parallel", action="store_true", help="Run independent tasks concurrently")
+    p_run.add_argument(
+        "--max-retries",
+        type=int,
+        default=0,
+        help="Max retry attempts per failed sub-agent task",
+    )
     p_run.set_defaults(func=_cmd_run)
 
     p_gen = sub.add_parser("generate", help="Emit .opencode agent files and opencode.json")
@@ -145,6 +153,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.add_argument("--host", default="127.0.0.1")
     p_serve.add_argument("--port", type=int, default=8000)
     p_serve.add_argument("--opencode", action="store_true", help="Use real opencode sub-agents")
+    p_serve.add_argument(
+        "--max-retries",
+        type=int,
+        default=0,
+        help="Max retry attempts per failed sub-agent task",
+    )
     p_serve.set_defaults(func=_cmd_serve)
 
     p_mem = sub.add_parser("memory", help="Inspect or manage Chief AI persistent memory")
