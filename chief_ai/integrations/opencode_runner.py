@@ -15,6 +15,12 @@ from ..core.chief import Executor
 from ..core.registry import get_sub_agent
 
 
+class ExecutionError(RuntimeError):
+    """Raised when an opencode sub-agent execution returns a non-zero exit code."""
+
+    pass
+
+
 class OpencodeRunner(Executor):
     def __init__(self, timeout: int = 600, binary: str = "opencode") -> None:
         self.timeout = timeout
@@ -38,5 +44,7 @@ class OpencodeRunner(Executor):
             timeout=self.timeout,
         )
         if proc.returncode != 0:
-            return f"[{agent.name}] execution failed (exit {proc.returncode}):\n{proc.stderr}"
+            raise ExecutionError(
+                f"[{agent.name}] execution failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
         return proc.stdout.strip() or f"[{agent.name}] returned no output."

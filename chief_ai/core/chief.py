@@ -65,9 +65,15 @@ class MockExecutor(Executor):
 
 
 class ChiefAI:
-    def __init__(self, memory: MemoryAI | None = None, executor: Executor | None = None) -> None:
+    def __init__(
+        self,
+        memory: MemoryAI | None = None,
+        executor: Executor | None = None,
+        max_retries: int = 0,
+    ) -> None:
         self.memory = memory or MemoryAI()
         self.executor = executor or MockExecutor()
+        self.max_retries = max_retries
 
     # -- memory context ----------------------------------------------------
     def _memory_context(self, text: str, exclude: tuple[str, ...] = ()) -> str:
@@ -83,12 +89,17 @@ class ChiefAI:
         return Plan(goal=goal, tasks=decompose(goal))
 
     # -- dispatch ----------------------------------------------------------
-    def dispatch(self, task: Task, upstream_results: list[Result] | None = None) -> Result:
+    def dispatch(
+        self,
+        task: Task,
+        upstream_results: list[Result] | None = None,
+        max_retries: int | None = None,
+    ) -> Result:
         if not task.sub_agent:
             raise ValueError("Task has no assigned sub-agent")
         agent = get_sub_agent(task.sub_agent)
         ctx = self._memory_context(task.description)
-        prompt_parts = [
+        base_prompt_parts = [
             f"Goal: {task.description}\n",
             f"You are the {agent.name} specialist. Complete your part of this goal "
             f"and return a focused, integratable result.",
@@ -104,19 +115,43 @@ class ChiefAI:
                     dep_agent_name = get_sub_agent(res.sub_agent).name if res.sub_agent else dep
                     dep_outputs.append(f"### {dep_agent_name} ({res.task_id})\n{res.content}")
             if dep_outputs:
-                prompt_parts.append("## Upstream Task Outputs\n" + "\n\n".join(dep_outputs))
+                base_prompt_parts.append("## Upstream Task Outputs\n" + "\n\n".join(dep_outputs))
 
         if ctx:
-            prompt_parts.append(ctx)
+            base_prompt_parts.append(ctx)
 
-        prompt = "\n\n".join(prompt_parts)
+        effective_retries = max_retries if max_retries is not None else self.max_retries
+        attempts = 0
+        last_error: str | None = None
+        content = ""
+        status = TaskStatus.FAILED
 
-        try:
-            content = self.executor.run(task.sub_agent, prompt)
-            status = TaskStatus.SUCCESS
-        except Exception as err:
-            content = f"Error executing task {task.id}: {err}"
-            status = TaskStatus.FAILED
+        while attempts <= effective_retries:
+            attempts += 1
+            prompt_parts = list(base_prompt_parts)
+
+            if last_error:
+                prompt_parts.append(
+                    f"## Execution Error Feedback (Attempt {attempts}/{effective_retries + 1})\n"
+                    f"The previous execution attempt failed with error:\n{last_error}\n"
+                    "Please review the error and correct your output."
+                )
+
+            prompt = "\n\n".join(prompt_parts)
+
+            try:
+                content = self.executor.run(task.sub_agent, prompt)
+                status = TaskStatus.SUCCESS
+                break
+            except Exception as err:
+                last_error = str(err)
+                content = f"Error executing task {task.id}: {err}"
+                status = TaskStatus.FAILED
+                if attempts <= effective_retries:
+                    self.memory.log_event(
+                        f"retry:{task.id}",
+                        f"Attempt {attempts} failed: {err}. Retrying...",
+                    )
 
         self.memory.log_event(f"result:{task.id}", content)
         self.memory.log_event("dispatch", f"{task.id} -> {agent.id}")
@@ -125,6 +160,7 @@ class ChiefAI:
             sub_agent=task.sub_agent,
             content=content,
             status=status,
+            metadata={"attempts": str(attempts), "retries": str(attempts - 1)},
         )
 
     # -- scheduling --------------------------------------------------------
