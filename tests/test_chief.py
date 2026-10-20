@@ -113,3 +113,37 @@ def test_result_status_tracking() -> None:
     assert res.status == TaskStatus.FAILED
     assert "Error executing task" in res.content
     assert "LLM connection failed" in res.content
+
+
+async def test_async_execution() -> None:
+    chief = ChiefAI(executor=MockExecutor())
+    out = await chief.execute_async("Build the next version of my portfolio", parallel=True)
+    assert "Chief AI — Integrated Result" in out
+    assert "Frontend Expert" in out
+
+
+async def test_async_dispatch_and_failing_async_executor() -> None:
+    from chief_ai.core.types import TaskStatus
+
+    class AsyncFailingExecutor(Executor):
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            raise RuntimeError("Sync fail")
+
+        async def run_async(self, sub_agent_id: str, prompt: str) -> str:
+            raise RuntimeError("Async fail")
+
+    chief = ChiefAI(executor=AsyncFailingExecutor())
+    plan = chief.plan("Fix backend bug")
+    res = await chief.dispatch_async(plan.tasks[0])
+    assert res.status == TaskStatus.FAILED
+    assert "Async fail" in res.content
+
+
+async def test_opencode_runner_run_async_missing_binary() -> None:
+    import pytest
+
+    from chief_ai.integrations.opencode_runner import OpencodeRunner
+
+    runner = OpencodeRunner(binary="non_existent_opencode_binary_xyz")
+    with pytest.raises(RuntimeError, match="binary not found on PATH"):
+        await runner.run_async("eng-frontend", "test prompt")

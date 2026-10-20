@@ -8,6 +8,7 @@ installed, :meth:`OpencodeRunner.run` raises a clear error.
 
 from __future__ import annotations
 
+import asyncio
 import shutil
 import subprocess
 
@@ -40,3 +41,24 @@ class OpencodeRunner(Executor):
         if proc.returncode != 0:
             return f"[{agent.name}] execution failed (exit {proc.returncode}):\n{proc.stderr}"
         return proc.stdout.strip() or f"[{agent.name}] returned no output."
+
+    async def run_async(self, sub_agent_id: str, prompt: str) -> str:
+        self._ensure_binary()
+        agent = get_sub_agent(sub_agent_id)
+        message = f"@{agent.id} {prompt}"
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                self.binary,
+                "run",
+                message,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self.timeout)
+            out_str = stdout.decode("utf-8", errors="replace").strip()
+            err_str = stderr.decode("utf-8", errors="replace").strip()
+            if proc.returncode != 0:
+                return f"[{agent.name}] execution failed (exit {proc.returncode}):\n{err_str}"
+            return out_str or f"[{agent.name}] returned no output."
+        except TimeoutError:
+            return f"[{agent.name}] execution timed out after {self.timeout}s."
