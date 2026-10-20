@@ -44,8 +44,12 @@ class Executor(ABC):
     """Runs a single sub-agent task and returns its output."""
 
     @abstractmethod
-    def run(self, sub_agent_id: str, prompt: str) -> str:
-        ...
+    def run(self, sub_agent_id: str, prompt: str) -> str: ...
+
+    async def run_async(self, sub_agent_id: str, prompt: str) -> str:
+        import asyncio
+
+        return await asyncio.to_thread(self.run, sub_agent_id, prompt)
 
 
 class MockExecutor(Executor):
@@ -82,8 +86,8 @@ class ChiefAI:
         self.memory.log_event("plan", goal)
         return Plan(goal=goal, tasks=decompose(goal))
 
-    # -- dispatch ----------------------------------------------------------
-    def dispatch(self, task: Task, upstream_results: list[Result] | None = None) -> Result:
+    # -- prompt construction -----------------------------------------------
+    def _build_prompt(self, task: Task, upstream_results: list[Result] | None = None) -> str:
         if not task.sub_agent:
             raise ValueError("Task has no assigned sub-agent")
         agent = get_sub_agent(task.sub_agent)
@@ -109,7 +113,13 @@ class ChiefAI:
         if ctx:
             prompt_parts.append(ctx)
 
-        prompt = "\n\n".join(prompt_parts)
+        return "\n\n".join(prompt_parts)
+
+    # -- dispatch ----------------------------------------------------------
+    def dispatch(self, task: Task, upstream_results: list[Result] | None = None) -> Result:
+        if not task.sub_agent:
+            raise ValueError("Task has no assigned sub-agent")
+        prompt = self._build_prompt(task, upstream_results)
 
         try:
             content = self.executor.run(task.sub_agent, prompt)
@@ -119,7 +129,30 @@ class ChiefAI:
             status = TaskStatus.FAILED
 
         self.memory.log_event(f"result:{task.id}", content)
-        self.memory.log_event("dispatch", f"{task.id} -> {agent.id}")
+        self.memory.log_event("dispatch", f"{task.id} -> {task.sub_agent}")
+        return Result(
+            task_id=task.id,
+            sub_agent=task.sub_agent,
+            content=content,
+            status=status,
+        )
+
+    async def dispatch_async(
+        self, task: Task, upstream_results: list[Result] | None = None
+    ) -> Result:
+        if not task.sub_agent:
+            raise ValueError("Task has no assigned sub-agent")
+        prompt = self._build_prompt(task, upstream_results)
+
+        try:
+            content = await self.executor.run_async(task.sub_agent, prompt)
+            status = TaskStatus.SUCCESS
+        except Exception as err:
+            content = f"Error executing task {task.id}: {err}"
+            status = TaskStatus.FAILED
+
+        self.memory.log_event(f"result:{task.id}", content)
+        self.memory.log_event("dispatch", f"{task.id} -> {task.sub_agent}")
         return Result(
             task_id=task.id,
             sub_agent=task.sub_agent,
@@ -135,19 +168,13 @@ class ChiefAI:
         results: dict[str, Result] = {}
 
         while pending:
-            ready = [
-                t
-                for t in pending.values()
-                if all(d in done for d in t.dependencies)
-            ]
+            ready = [t for t in pending.values() if all(d in done for d in t.dependencies)]
             if not ready:
                 # No task is ready but work remains -> break cycles defensively.
                 ready = list(pending.values())
 
             with ThreadPoolExecutor(max_workers=min(len(ready), 8)) as ex:
-                futures = {
-                    ex.submit(self.dispatch, t, list(results.values())): t.id for t in ready
-                }
+                futures = {ex.submit(self.dispatch, t, list(results.values())): t.id for t in ready}
                 for fut in futures:
                     res = fut.result()
                     results[res.task_id] = res
@@ -219,9 +246,7 @@ class ChiefAI:
             for t in ready:
                 yield {"type": "task_start", "task_id": t.id, "sub_agent": t.sub_agent}
             with ThreadPoolExecutor(max_workers=min(len(ready), 8)) as ex:
-                futures = {
-                    ex.submit(self.dispatch, t, list(results.values())): t.id for t in ready
-                }
+                futures = {ex.submit(self.dispatch, t, list(results.values())): t.id for t in ready}
                 for fut in futures:
                     res = fut.result()
                     results[res.task_id] = res
@@ -236,6 +261,32 @@ class ChiefAI:
                         "content": res.content,
                     }
 
+    # -- async scheduling --------------------------------------------------
+    async def _schedule_async(self, plan: Plan) -> list[Result]:
+        """Execute tasks respecting dependencies concurrently with asyncio."""
+        import asyncio
+
+        pending = {t.id: t for t in plan.tasks}
+        done: set[str] = set()
+        results: dict[str, Result] = {}
+
+        while pending:
+            ready = [t for t in pending.values() if all(d in done for d in t.dependencies)]
+            if not ready:
+                ready = list(pending.values())
+
+            res_list = await asyncio.gather(
+                *(self.dispatch_async(t, list(results.values())) for t in ready)
+            )
+            for res in res_list:
+                results[res.task_id] = res
+                done.add(res.task_id)
+                if res.sub_agent:
+                    done.add(res.sub_agent)
+                pending.pop(res.task_id, None)
+
+        return [results[t.id] for t in plan.tasks]
+
     # -- full pipeline -----------------------------------------------------
     def execute(self, goal: str, parallel: bool = False) -> str:
         plan = self.plan(goal)
@@ -245,6 +296,17 @@ class ChiefAI:
             results = []
             for t in plan.tasks:
                 results.append(self.dispatch(t, results))
+        return self.synthesize(plan, results)
+
+    async def execute_async(self, goal: str, parallel: bool = False) -> str:
+        plan = self.plan(goal)
+        if parallel:
+            results = await self._schedule_async(plan)
+        else:
+            results = []
+            for t in plan.tasks:
+                res = await self.dispatch_async(t, results)
+                results.append(res)
         return self.synthesize(plan, results)
 
 
