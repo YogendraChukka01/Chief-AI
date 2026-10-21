@@ -39,6 +39,18 @@ def test_cli_memory_forget(tmp_path, capsys) -> None:
     assert "Key not found in memory: 'nonexistent'" in captured
 
 
+def test_cli_memory_search(tmp_path, capsys) -> None:
+    mem_path = str(tmp_path / "memory.json")
+    mem = MemoryAI(path=mem_path)
+    mem.remember("framework", "Python microservice with FastAPI")
+
+    ret = main(["memory", "--path", mem_path, "search", "FastAPI"])
+    assert ret == 0
+    captured = capsys.readouterr().out
+    assert "Memory search for 'FastAPI'" in captured
+    assert "framework: Python microservice with FastAPI" in captured
+
+
 def test_cli_memory_clear(tmp_path, capsys) -> None:
     mem_path = str(tmp_path / "memory.json")
     mem = MemoryAI(path=mem_path)
