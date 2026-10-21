@@ -77,9 +77,7 @@ class MemoryAI:
         self._state.facts = raw.get("facts", {})
         self._state.categories = raw.get("categories", {})
         self._state.history = raw.get("history", [])
-        self._state.nodes = {
-            k: _GraphNode(**v) for k, v in raw.get("nodes", {}).items()
-        }
+        self._state.nodes = {k: _GraphNode(**v) for k, v in raw.get("nodes", {}).items()}
         self._state.edges = [_GraphEdge(**e) for e in raw.get("edges", [])]
 
     def _save_json(self) -> None:
@@ -102,7 +100,9 @@ class MemoryAI:
             cur = conn.cursor()
 
             # Facts table
-            cur.execute("CREATE TABLE IF NOT EXISTS facts (key TEXT PRIMARY KEY, value TEXT, category TEXT)")
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS facts (key TEXT PRIMARY KEY, value TEXT, category TEXT)"
+            )
             cur.execute("SELECT key, value, category FROM facts")
             for k, v, cat in cur.fetchall():
                 self._state.facts[k] = v
@@ -110,12 +110,17 @@ class MemoryAI:
                     self._state.categories[k] = cat
 
             # History table
-            cur.execute("CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT)")
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS history "
+                "(id INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT)"
+            )
             cur.execute("SELECT payload FROM history ORDER BY id ASC")
             self._state.history = [json.loads(row[0]) for row in cur.fetchall()]
 
             # Nodes table
-            cur.execute("CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, kind TEXT, label TEXT)")
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, kind TEXT, label TEXT)"
+            )
             cur.execute("SELECT id, kind, label FROM nodes")
             self._state.nodes = {r[0]: _GraphNode(r[0], r[1], r[2]) for r in cur.fetchall()}
 
@@ -133,13 +138,18 @@ class MemoryAI:
         conn = sqlite3.connect(self.path)
         cur = conn.cursor()
 
-        cur.execute("CREATE TABLE IF NOT EXISTS facts (key TEXT PRIMARY KEY, value TEXT, category TEXT)")
+        cur.execute(
+            "CREATE TABLE IF NOT EXISTS facts (key TEXT PRIMARY KEY, value TEXT, category TEXT)"
+        )
         cur.execute("DELETE FROM facts")
         for k, v in self._state.facts.items():
             cat = self._state.categories.get(k)
             cur.execute("INSERT INTO facts (key, value, category) VALUES (?, ?, ?)", (k, v, cat))
 
-        cur.execute("CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT)")
+        cur.execute(
+            "CREATE TABLE IF NOT EXISTS history "
+            "(id INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT)"
+        )
         cur.execute("DELETE FROM history")
         for h in self._state.history:
             cur.execute("INSERT INTO history (payload) VALUES (?)", (json.dumps(h),))
@@ -147,12 +157,18 @@ class MemoryAI:
         cur.execute("CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, kind TEXT, label TEXT)")
         cur.execute("DELETE FROM nodes")
         for node in self._state.nodes.values():
-            cur.execute("INSERT INTO nodes (id, kind, label) VALUES (?, ?, ?)", (node.id, node.kind, node.label))
+            cur.execute(
+                "INSERT INTO nodes (id, kind, label) VALUES (?, ?, ?)",
+                (node.id, node.kind, node.label),
+            )
 
         cur.execute("CREATE TABLE IF NOT EXISTS edges (src TEXT, dst TEXT, relation TEXT)")
         cur.execute("DELETE FROM edges")
         for edge in self._state.edges:
-            cur.execute("INSERT INTO edges (src, dst, relation) VALUES (?, ?, ?)", (edge.src, edge.dst, edge.relation))
+            cur.execute(
+                "INSERT INTO edges (src, dst, relation) VALUES (?, ?, ?)",
+                (edge.src, edge.dst, edge.relation),
+            )
 
         conn.commit()
         conn.close()
@@ -172,9 +188,7 @@ class MemoryAI:
 
     def recall_by_category(self, category: str) -> dict[str, str]:
         return {
-            k: v
-            for k, v in self._state.facts.items()
-            if self._state.categories.get(k) == category
+            k: v for k, v in self._state.facts.items() if self._state.categories.get(k) == category
         }
 
     def forget(self, key: str) -> bool:
@@ -215,21 +229,37 @@ class MemoryAI:
 
     # -- context retrieval -------------------------------------------------
     def retrieve(self, query: str, limit: int = 5, exclude: tuple[str, ...] = ()) -> list[str]:
-        """Return facts whose key or value shares a meaningful term with ``query``.
+        """Return facts scored and ranked by relevance to ``query``.
 
         Keys starting with any ``exclude`` prefix are skipped (e.g. per-task
         ``result:`` entries, which should not resurface as prior context).
         """
         import re
 
-        tokens = {t for t in re.findall(r"[a-z0-9]{3,}", query.lower())}
+        lowered_query = query.lower()
+        tokens = set(re.findall(r"[a-z0-9]{3,}", lowered_query))
         if not tokens:
             return []
-        hits = []
+
+        scored_hits: list[tuple[float, str]] = []
         for k, v in self._state.facts.items():
             if any(k.startswith(p) for p in exclude):
                 continue
             hay = f"{k} {v}".lower()
-            if any(tok in hay for tok in tokens):
-                hits.append(f"{k}: {v}")
-        return hits[:limit]
+            score = 0.0
+
+            # Exact substring match bonus
+            if lowered_query in hay:
+                score += 3.0
+
+            # Unique token coverage and term frequency scoring
+            for tok in tokens:
+                count = hay.count(tok)
+                if count > 0:
+                    score += 2.0 + (count * 0.5)
+
+            if score > 0:
+                scored_hits.append((score, f"{k}: {v}"))
+
+        scored_hits.sort(key=lambda item: item[0], reverse=True)
+        return [item[1] for item in scored_hits[:limit]]

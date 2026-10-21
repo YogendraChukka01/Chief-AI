@@ -100,6 +100,14 @@ def test_dispatch_injects_upstream_results() -> None:
     assert "Upstream Task Outputs" in last_prompt or "Frontend Expert" in last_prompt
 
 
+def test_dispatch_tracks_duration() -> None:
+    chief = ChiefAI(executor=MockExecutor())
+    plan = chief.plan("Fix a bug in backend")
+    res = chief.dispatch(plan.tasks[0])
+    assert hasattr(res, "duration_seconds")
+    assert res.duration_seconds >= 0.0
+
+
 def test_result_status_tracking() -> None:
     from chief_ai.core.types import TaskStatus
 

@@ -47,6 +47,18 @@ def test_memory_sqlite_backend(tmp_path) -> None:
     assert g["nodes"][0]["id"] == "db1"
 
 
+def test_memory_retrieve_relevance_scoring(tmp_path) -> None:
+    path = str(tmp_path / "mem.json")
+    mem = MemoryAI(path=path)
+    mem.remember("proj1", "Python backend API framework built with FastAPI", category="tech")
+    mem.remember("proj2", "Frontend React web application UI components", category="tech")
+    mem.remember("proj3", "Python data processing script with pandas", category="tech")
+
+    results = mem.retrieve("Python backend API", limit=2)
+    assert len(results) == 2
+    assert "proj1" in results[0]
+
+
 def test_memory_remember_recall_and_categories(tmp_path) -> None:
     path = str(tmp_path / "mem.json")
     mem = MemoryAI(path=path)
