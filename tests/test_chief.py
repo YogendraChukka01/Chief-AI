@@ -113,3 +113,49 @@ def test_result_status_tracking() -> None:
     assert res.status == TaskStatus.FAILED
     assert "Error executing task" in res.content
     assert "LLM connection failed" in res.content
+
+
+def test_task_retry_transient_failure() -> None:
+    from chief_ai.core.types import TaskStatus
+
+    class FlakyExecutor(Executor):
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            self.calls += 1
+            if self.calls < 3:
+                raise RuntimeError("Temporary error")
+            return "Success on attempt 3"
+
+    flaky_exec = FlakyExecutor()
+    chief = ChiefAI(executor=flaky_exec, max_retries=2)
+    plan = chief.plan("Fix a bug in backend")
+    res = chief.dispatch(plan.tasks[0])
+
+    assert flaky_exec.calls == 3
+    assert res.status == TaskStatus.SUCCESS
+    assert res.content == "Success on attempt 3"
+    assert res.metadata.get("attempts") == "3"
+
+
+def test_task_retry_exhaustion() -> None:
+    from chief_ai.core.types import TaskStatus
+
+    class AlwaysFailingExecutor(Executor):
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            self.calls += 1
+            raise RuntimeError("Persistent error")
+
+    failing_exec = AlwaysFailingExecutor()
+    chief = ChiefAI(executor=failing_exec, max_retries=2)
+    plan = chief.plan("Fix a bug in backend")
+    res = chief.dispatch(plan.tasks[0])
+
+    assert failing_exec.calls == 3
+    assert res.status == TaskStatus.FAILED
+    assert "Persistent error" in res.content
+    assert res.metadata.get("attempts") == "3"

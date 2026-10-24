@@ -65,9 +65,15 @@ class MockExecutor(Executor):
 
 
 class ChiefAI:
-    def __init__(self, memory: MemoryAI | None = None, executor: Executor | None = None) -> None:
+    def __init__(
+        self,
+        memory: MemoryAI | None = None,
+        executor: Executor | None = None,
+        max_retries: int = 0,
+    ) -> None:
         self.memory = memory or MemoryAI()
         self.executor = executor or MockExecutor()
+        self.max_retries = max_retries
 
     # -- memory context ----------------------------------------------------
     def _memory_context(self, text: str, exclude: tuple[str, ...] = ()) -> str:
@@ -83,7 +89,12 @@ class ChiefAI:
         return Plan(goal=goal, tasks=decompose(goal))
 
     # -- dispatch ----------------------------------------------------------
-    def dispatch(self, task: Task, upstream_results: list[Result] | None = None) -> Result:
+    def dispatch(
+        self,
+        task: Task,
+        upstream_results: list[Result] | None = None,
+        max_retries: int | None = None,
+    ) -> Result:
         if not task.sub_agent:
             raise ValueError("Task has no assigned sub-agent")
         agent = get_sub_agent(task.sub_agent)
@@ -111,12 +122,23 @@ class ChiefAI:
 
         prompt = "\n\n".join(prompt_parts)
 
-        try:
-            content = self.executor.run(task.sub_agent, prompt)
-            status = TaskStatus.SUCCESS
-        except Exception as err:
-            content = f"Error executing task {task.id}: {err}"
-            status = TaskStatus.FAILED
+        retries = max_retries if max_retries is not None else self.max_retries
+        attempts = 0
+        status = TaskStatus.FAILED
+        content = ""
+
+        while attempts <= retries:
+            try:
+                content = self.executor.run(task.sub_agent, prompt)
+                status = TaskStatus.SUCCESS
+                attempts += 1
+                break
+            except Exception as err:
+                attempts += 1
+                content = f"Error executing task {task.id}: {err}"
+                status = TaskStatus.FAILED
+                if attempts <= retries:
+                    self.memory.log_event("retry", f"{task.id} (attempt {attempts}/{retries})")
 
         self.memory.log_event(f"result:{task.id}", content)
         self.memory.log_event("dispatch", f"{task.id} -> {agent.id}")
@@ -125,6 +147,7 @@ class ChiefAI:
             sub_agent=task.sub_agent,
             content=content,
             status=status,
+            metadata={"attempts": str(attempts)},
         )
 
     # -- scheduling --------------------------------------------------------
