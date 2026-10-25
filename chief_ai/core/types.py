@@ -63,6 +63,7 @@ class Task:
     department: str | None = None
     sub_agent: str | None = None
     dependencies: list[str] = field(default_factory=list)
+    max_retries: int = 0
 
 
 class TaskStatus(StrEnum):
