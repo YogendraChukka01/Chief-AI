@@ -15,7 +15,7 @@ tasks can be executed in parallel with dependency-aware scheduling.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
@@ -44,8 +44,7 @@ class Executor(ABC):
     """Runs a single sub-agent task and returns its output."""
 
     @abstractmethod
-    def run(self, sub_agent_id: str, prompt: str) -> str:
-        ...
+    def run(self, sub_agent_id: str, prompt: str) -> str: ...
 
 
 class MockExecutor(Executor):
@@ -65,9 +64,15 @@ class MockExecutor(Executor):
 
 
 class ChiefAI:
-    def __init__(self, memory: MemoryAI | None = None, executor: Executor | None = None) -> None:
+    def __init__(
+        self,
+        memory: MemoryAI | None = None,
+        executor: Executor | None = None,
+        max_retries: int = 0,
+    ) -> None:
         self.memory = memory or MemoryAI()
         self.executor = executor or MockExecutor()
+        self.max_retries = max_retries
 
     # -- memory context ----------------------------------------------------
     def _memory_context(self, text: str, exclude: tuple[str, ...] = ()) -> str:
@@ -83,48 +88,93 @@ class ChiefAI:
         return Plan(goal=goal, tasks=decompose(goal))
 
     # -- dispatch ----------------------------------------------------------
-    def dispatch(self, task: Task, upstream_results: list[Result] | None = None) -> Result:
+    def dispatch(
+        self,
+        task: Task,
+        upstream_results: list[Result] | None = None,
+        on_retry: Callable[[int, str], None] | None = None,
+    ) -> Result:
         if not task.sub_agent:
             raise ValueError("Task has no assigned sub-agent")
         agent = get_sub_agent(task.sub_agent)
-        ctx = self._memory_context(task.description)
-        prompt_parts = [
-            f"Goal: {task.description}\n",
-            f"You are the {agent.name} specialist. Complete your part of this goal "
-            f"and return a focused, integratable result.",
-        ]
+        effective_max_retries = max(self.max_retries, getattr(task, "max_retries", 0))
 
-        if task.dependencies and upstream_results:
-            dep_outputs = []
-            id_map = {r.task_id: r for r in upstream_results}
-            agent_map = {r.sub_agent: r for r in upstream_results if r.sub_agent}
-            for dep in task.dependencies:
-                res = id_map.get(dep) or agent_map.get(dep)
-                if res:
-                    dep_agent_name = get_sub_agent(res.sub_agent).name if res.sub_agent else dep
-                    dep_outputs.append(f"### {dep_agent_name} ({res.task_id})\n{res.content}")
-            if dep_outputs:
-                prompt_parts.append("## Upstream Task Outputs\n" + "\n\n".join(dep_outputs))
+        attempt = 0
+        last_error = ""
+        last_content = ""
 
-        if ctx:
-            prompt_parts.append(ctx)
+        while attempt <= effective_max_retries:
+            ctx = self._memory_context(task.description)
+            prompt_parts = [
+                f"Goal: {task.description}\n",
+                f"You are the {agent.name} specialist. Complete your part of this goal "
+                f"and return a focused, integratable result.",
+            ]
 
-        prompt = "\n\n".join(prompt_parts)
+            if task.dependencies and upstream_results:
+                dep_outputs = []
+                id_map = {r.task_id: r for r in upstream_results}
+                agent_map = {r.sub_agent: r for r in upstream_results if r.sub_agent}
+                for dep in task.dependencies:
+                    res = id_map.get(dep) or agent_map.get(dep)
+                    if res:
+                        dep_agent_name = get_sub_agent(res.sub_agent).name if res.sub_agent else dep
+                        dep_outputs.append(f"### {dep_agent_name} ({res.task_id})\n{res.content}")
+                if dep_outputs:
+                    prompt_parts.append("## Upstream Task Outputs\n" + "\n\n".join(dep_outputs))
 
-        try:
-            content = self.executor.run(task.sub_agent, prompt)
-            status = TaskStatus.SUCCESS
-        except Exception as err:
-            content = f"Error executing task {task.id}: {err}"
-            status = TaskStatus.FAILED
+            if ctx:
+                prompt_parts.append(ctx)
 
-        self.memory.log_event(f"result:{task.id}", content)
-        self.memory.log_event("dispatch", f"{task.id} -> {agent.id}")
+            if attempt > 0:
+                prompt_parts.append(
+                    f"## Previous Attempt Failure (Attempt {attempt}/{effective_max_retries})\n"
+                    f"Your previous attempt failed or returned an error.\n"
+                    f"Error/Feedback: {last_error}\n"
+                    f"Previous Content Output:\n{last_content}\n\n"
+                    "Please review the error and output above, fix issues, and return result."
+                )
+
+            prompt = "\n\n".join(prompt_parts)
+
+            try:
+                content = self.executor.run(task.sub_agent, prompt)
+                status = TaskStatus.SUCCESS
+            except Exception as err:
+                content = f"Error executing task {task.id}: {err}"
+                status = TaskStatus.FAILED
+
+            if status == TaskStatus.SUCCESS:
+                self.memory.log_event(f"result:{task.id}", content)
+                self.memory.log_event("dispatch", f"{task.id} -> {agent.id}")
+                return Result(
+                    task_id=task.id,
+                    sub_agent=task.sub_agent,
+                    content=content,
+                    status=status,
+                    metadata={"attempts": str(attempt + 1)},
+                )
+
+            # Execution failed or raised exception
+            last_error = content
+            last_content = content
+            attempt += 1
+
+            if attempt <= effective_max_retries:
+                if on_retry:
+                    on_retry(attempt, last_error)
+                self.memory.log_event("retry", f"{task.id} attempt {attempt}: {last_error}")
+
+        self.memory.log_event(f"result:{task.id}", last_content)
+        self.memory.log_event(
+            "dispatch", f"{task.id} -> {agent.id} (failed after {attempt} attempts)"
+        )
         return Result(
             task_id=task.id,
             sub_agent=task.sub_agent,
-            content=content,
-            status=status,
+            content=last_content,
+            status=TaskStatus.FAILED,
+            metadata={"attempts": str(attempt)},
         )
 
     # -- scheduling --------------------------------------------------------
@@ -135,19 +185,13 @@ class ChiefAI:
         results: dict[str, Result] = {}
 
         while pending:
-            ready = [
-                t
-                for t in pending.values()
-                if all(d in done for d in t.dependencies)
-            ]
+            ready = [t for t in pending.values() if all(d in done for d in t.dependencies)]
             if not ready:
                 # No task is ready but work remains -> break cycles defensively.
                 ready = list(pending.values())
 
             with ThreadPoolExecutor(max_workers=min(len(ready), 8)) as ex:
-                futures = {
-                    ex.submit(self.dispatch, t, list(results.values())): t.id for t in ready
-                }
+                futures = {ex.submit(self.dispatch, t, list(results.values())): t.id for t in ready}
                 for fut in futures:
                     res = fut.result()
                     results[res.task_id] = res
@@ -198,7 +242,31 @@ class ChiefAI:
         else:
             for task in plan.tasks:
                 yield {"type": "task_start", "task_id": task.id, "sub_agent": task.sub_agent}
-                res = self.dispatch(task, list(results.values()))
+                retry_events: list[dict] = []
+
+                def _make_seq_cb(
+                    evs: list[dict], t_id: str, s_agent: str | None
+                ) -> Callable[[int, str], None]:
+                    def _cb(attempt: int, error: str) -> None:
+                        evs.append(
+                            {
+                                "type": "task_retry",
+                                "task_id": t_id,
+                                "sub_agent": s_agent,
+                                "attempt": attempt,
+                                "error": error,
+                            }
+                        )
+
+                    return _cb
+
+                res = self.dispatch(
+                    task,
+                    upstream_results=list(results.values()),
+                    on_retry=_make_seq_cb(retry_events, task.id, task.sub_agent),
+                )
+                yield from retry_events
+
                 results[task.id] = res
                 yield {
                     "type": "task_done",
@@ -218,12 +286,38 @@ class ChiefAI:
                 ready = list(pending.values())
             for t in ready:
                 yield {"type": "task_start", "task_id": t.id, "sub_agent": t.sub_agent}
+            retry_events: list[dict] = []
+
+            def _make_on_retry(
+                evs: list[dict], t_id: str, s_agent: str | None
+            ) -> Callable[[int, str], None]:
+                def _on_retry(attempt: int, error: str) -> None:
+                    evs.append(
+                        {
+                            "type": "task_retry",
+                            "task_id": t_id,
+                            "sub_agent": s_agent,
+                            "attempt": attempt,
+                            "error": error,
+                        }
+                    )
+
+                return _on_retry
+
             with ThreadPoolExecutor(max_workers=min(len(ready), 8)) as ex:
                 futures = {
-                    ex.submit(self.dispatch, t, list(results.values())): t.id for t in ready
+                    ex.submit(
+                        self.dispatch,
+                        t,
+                        list(results.values()),
+                        _make_on_retry(retry_events, t.id, t.sub_agent),
+                    ): t.id
+                    for t in ready
                 }
                 for fut in futures:
                     res = fut.result()
+                    yield from retry_events
+                    retry_events.clear()
                     results[res.task_id] = res
                     done.add(res.task_id)
                     if res.sub_agent:

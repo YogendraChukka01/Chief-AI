@@ -113,3 +113,66 @@ def test_result_status_tracking() -> None:
     assert res.status == TaskStatus.FAILED
     assert "Error executing task" in res.content
     assert "LLM connection failed" in res.content
+
+
+def test_dispatch_retry_on_failure() -> None:
+    from chief_ai.core.types import Task, TaskStatus
+
+    class FlakyExecutor(Executor):
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("Transient network issue")
+            return "Success on retry"
+
+    chief = ChiefAI(executor=FlakyExecutor(), max_retries=2)
+    task = Task(id="t1", description="Test task", sub_agent="eng-backend")
+    res = chief.dispatch(task)
+
+    assert res.status == TaskStatus.SUCCESS
+    assert res.content == "Success on retry"
+    assert res.metadata.get("attempts") == "2"
+
+
+def test_dispatch_max_retries_exceeded() -> None:
+    from chief_ai.core.types import Task, TaskStatus
+
+    class AlwaysFailingExecutor(Executor):
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            raise RuntimeError("Persistent error")
+
+    chief = ChiefAI(executor=AlwaysFailingExecutor(), max_retries=2)
+    task = Task(id="t1", description="Test task", sub_agent="eng-backend")
+    res = chief.dispatch(task)
+
+    assert res.status == TaskStatus.FAILED
+    assert "Persistent error" in res.content
+    assert res.metadata.get("attempts") == "3"
+
+
+def test_retry_prompt_feedback_injection() -> None:
+    from chief_ai.core.types import Task
+
+    prompts: list[str] = []
+
+    class CapturingFlakyExecutor(Executor):
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            prompts.append(prompt)
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("Syntax error in generated code")
+            return "Fixed code output"
+
+    chief = ChiefAI(executor=CapturingFlakyExecutor(), max_retries=1)
+    task = Task(id="t1", description="Write function", sub_agent="eng-backend")
+    chief.dispatch(task)
+
+    assert len(prompts) == 2
+    assert "Previous Attempt Failure" in prompts[1]
+    assert "Syntax error in generated code" in prompts[1]

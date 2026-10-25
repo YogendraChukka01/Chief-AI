@@ -169,6 +169,12 @@ INDEX_HTML = """<!doctype html>
         renderDiagram(e.plan); renderTasks();
       } else if(e.type === "task_start"){
         if(taskState[e.task_id]){ taskState[e.task_id].status = "running"; renderTasks(); }
+      } else if(e.type === "task_retry"){
+        if(taskState[e.task_id]){
+          taskState[e.task_id].status = "running";
+          taskState[e.task_id].content = `[Retrying attempt ${e.attempt}] ${e.error}`;
+          renderTasks();
+        }
       } else if(e.type === "task_done"){
         if(taskState[e.task_id]){
           taskState[e.task_id].status = "done";
@@ -262,10 +268,13 @@ def _agent_name(sub_id: str | None) -> str:
 
 
 def make_server(
-    host: str = "127.0.0.1", port: int = 8000, use_opencode: bool = False
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    use_opencode: bool = False,
+    max_retries: int = 0,
 ) -> ThreadingHTTPServer:
     executor = OpencodeRunner() if use_opencode else None
-    chief = ChiefAI(memory=MemoryAI(), executor=executor)
+    chief = ChiefAI(memory=MemoryAI(), executor=executor, max_retries=max_retries)
 
     class Handler(_Handler):
         pass
