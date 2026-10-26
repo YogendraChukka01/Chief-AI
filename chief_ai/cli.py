@@ -50,8 +50,20 @@ def _cmd_plan(args: argparse.Namespace) -> int:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     executor = OpencodeRunner() if args.opencode else MockExecutor()
-    chief = ChiefAI(executor=executor)
-    print(chief.execute(args.goal, parallel=args.parallel))
+    chief = ChiefAI(executor=executor, max_retries=args.max_retries)
+    synthesis, summary = chief.execute_with_summary(
+        args.goal, parallel=args.parallel, max_retries=args.max_retries
+    )
+    print(synthesis)
+    if args.report:
+        report_path = args.report
+        os.makedirs(os.path.dirname(report_path) or ".", exist_ok=True)
+        content = (
+            summary.to_json() if report_path.endswith(".json") else summary.to_markdown()
+        )
+        with open(report_path, "w", encoding="utf-8") as fh:
+            fh.write(content)
+        print(f"\nSaved execution report to {report_path}")
     return 0
 
 
@@ -132,6 +144,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("goal")
     p_run.add_argument("--opencode", action="store_true", help="Use real opencode sub-agents")
     p_run.add_argument("--parallel", action="store_true", help="Run independent tasks concurrently")
+    p_run.add_argument(
+        "--max-retries",
+        type=int,
+        default=0,
+        help="Maximum retry attempts on task failure",
+    )
+    p_run.add_argument(
+        "--report", help="Path to export execution report (.md or .json)"
+    )
     p_run.set_defaults(func=_cmd_run)
 
     p_gen = sub.add_parser("generate", help="Emit .opencode agent files and opencode.json")
@@ -148,7 +169,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.set_defaults(func=_cmd_serve)
 
     p_mem = sub.add_parser("memory", help="Inspect or manage Chief AI persistent memory")
-    p_mem.add_argument("--path", default=".chief_memory/memory.json", help="Path to memory store file")
+    p_mem.add_argument(
+        "--path", default=".chief_memory/memory.json", help="Path to memory store file"
+    )
     mem_sub = p_mem.add_subparsers(dest="memory_command", required=True)
 
     p_mem_list = mem_sub.add_parser("list", help="List facts and knowledge graph summary")

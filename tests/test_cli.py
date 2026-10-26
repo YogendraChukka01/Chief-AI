@@ -54,3 +54,27 @@ def test_cli_memory_clear(tmp_path, capsys) -> None:
     mem_check = MemoryAI(path=mem_path)
     assert mem_check.recall("k1") is None
     assert mem_check.recall("k2") is None
+
+
+def test_cli_run_with_report_export(tmp_path, capsys) -> None:
+    report_json = str(tmp_path / "report.json")
+    report_md = str(tmp_path / "report.md")
+
+    ret_json = main(["run", "Fix a bug in backend", "--report", report_json])
+    assert ret_json == 0
+    captured_json = capsys.readouterr().out
+    assert "Chief AI — Integrated Result" in captured_json
+    assert "Saved execution report to" in captured_json
+
+    with open(report_json, encoding="utf-8") as fh:
+        json_content = fh.read()
+    assert '"goal": "Fix a bug in backend"' in json_content
+
+    ret_md = main(["run", "Fix a bug in backend", "--max-retries", "1", "--report", report_md])
+    assert ret_md == 0
+    captured_md = capsys.readouterr().out
+    assert "Chief AI — Integrated Result" in captured_md
+
+    with open(report_md, encoding="utf-8") as fh:
+        md_content = fh.read()
+    assert "# Chief AI Execution Summary" in md_content

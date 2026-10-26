@@ -113,3 +113,49 @@ def test_result_status_tracking() -> None:
     assert res.status == TaskStatus.FAILED
     assert "Error executing task" in res.content
     assert "LLM connection failed" in res.content
+
+
+def test_retry_on_failure_with_feedback_prompt_injection() -> None:
+    from chief_ai.core.types import TaskStatus
+
+    class RetryExecutor(Executor):
+        def __init__(self) -> None:
+            self.calls = 0
+            self.prompts: list[str] = []
+
+        def run(self, sub_agent_id: str, prompt: str) -> str:
+            self.calls += 1
+            self.prompts.append(prompt)
+            if self.calls == 1:
+                raise RuntimeError("Temporary error on attempt 1")
+            return "Recovered task output"
+
+    retry_exec = RetryExecutor()
+    chief = ChiefAI(executor=retry_exec, max_retries=1)
+    plan = chief.plan("Fix a bug in backend")
+    res = chief.dispatch(plan.tasks[0])
+
+    assert res.status == TaskStatus.SUCCESS
+    assert res.content == "Recovered task output"
+    assert res.metadata["attempts"] == "2"
+    assert len(retry_exec.prompts) == 2
+    assert "Previous Execution Failure (Attempt 1)" in retry_exec.prompts[1]
+    assert "Temporary error on attempt 1" in retry_exec.prompts[1]
+
+
+def test_execute_with_summary_metrics_and_export() -> None:
+    chief = ChiefAI(executor=MockExecutor())
+    synthesis, summary = chief.execute_with_summary("Fix a bug in backend")
+
+    assert summary.total_tasks > 0
+    assert summary.succeeded_tasks == summary.total_tasks
+    assert summary.failed_tasks == 0
+    assert "Chief AI — Integrated Result" in synthesis
+
+    json_str = summary.to_json()
+    assert '"goal": "Fix a bug in backend"' in json_str
+    assert '"total_tasks"' in json_str
+
+    md_str = summary.to_markdown()
+    assert "# Chief AI Execution Summary" in md_str
+    assert "**Goal**: Fix a bug in backend" in md_str

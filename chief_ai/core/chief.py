@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from .memory import MemoryAI
 from .registry import get_department, get_sub_agent
 from .router import decompose
-from .types import Result, Task, TaskStatus
+from .types import ExecutionSummary, Result, Task, TaskStatus
 
 
 @dataclass
@@ -65,9 +65,15 @@ class MockExecutor(Executor):
 
 
 class ChiefAI:
-    def __init__(self, memory: MemoryAI | None = None, executor: Executor | None = None) -> None:
+    def __init__(
+        self,
+        memory: MemoryAI | None = None,
+        executor: Executor | None = None,
+        max_retries: int = 0,
+    ) -> None:
         self.memory = memory or MemoryAI()
         self.executor = executor or MockExecutor()
+        self.max_retries = max_retries
 
     # -- memory context ----------------------------------------------------
     def _memory_context(self, text: str, exclude: tuple[str, ...] = ()) -> str:
@@ -83,52 +89,78 @@ class ChiefAI:
         return Plan(goal=goal, tasks=decompose(goal))
 
     # -- dispatch ----------------------------------------------------------
-    def dispatch(self, task: Task, upstream_results: list[Result] | None = None) -> Result:
+    def dispatch(
+        self,
+        task: Task,
+        upstream_results: list[Result] | None = None,
+        max_retries: int | None = None,
+    ) -> Result:
         if not task.sub_agent:
             raise ValueError("Task has no assigned sub-agent")
         agent = get_sub_agent(task.sub_agent)
         ctx = self._memory_context(task.description)
-        prompt_parts = [
-            f"Goal: {task.description}\n",
-            f"You are the {agent.name} specialist. Complete your part of this goal "
-            f"and return a focused, integratable result.",
-        ]
 
-        if task.dependencies and upstream_results:
-            dep_outputs = []
-            id_map = {r.task_id: r for r in upstream_results}
-            agent_map = {r.sub_agent: r for r in upstream_results if r.sub_agent}
-            for dep in task.dependencies:
-                res = id_map.get(dep) or agent_map.get(dep)
-                if res:
-                    dep_agent_name = get_sub_agent(res.sub_agent).name if res.sub_agent else dep
-                    dep_outputs.append(f"### {dep_agent_name} ({res.task_id})\n{res.content}")
-            if dep_outputs:
-                prompt_parts.append("## Upstream Task Outputs\n" + "\n\n".join(dep_outputs))
+        retries = max_retries if max_retries is not None else self.max_retries
+        attempts = 0
+        last_error: str | None = None
+        content = ""
+        status = TaskStatus.FAILED
 
-        if ctx:
-            prompt_parts.append(ctx)
+        while attempts <= retries:
+            attempts += 1
+            prompt_parts = [
+                f"Goal: {task.description}\n",
+                f"You are the {agent.name} specialist. Complete your part of this goal "
+                f"and return a focused, integratable result.",
+            ]
 
-        prompt = "\n\n".join(prompt_parts)
+            if task.dependencies and upstream_results:
+                dep_outputs = []
+                id_map = {r.task_id: r for r in upstream_results}
+                agent_map = {r.sub_agent: r for r in upstream_results if r.sub_agent}
+                for dep in task.dependencies:
+                    res = id_map.get(dep) or agent_map.get(dep)
+                    if res:
+                        dep_agent_name = (
+                            get_sub_agent(res.sub_agent).name if res.sub_agent else dep
+                        )
+                        dep_outputs.append(f"### {dep_agent_name} ({res.task_id})\n{res.content}")
+                if dep_outputs:
+                    prompt_parts.append("## Upstream Task Outputs\n" + "\n\n".join(dep_outputs))
 
-        try:
-            content = self.executor.run(task.sub_agent, prompt)
-            status = TaskStatus.SUCCESS
-        except Exception as err:
-            content = f"Error executing task {task.id}: {err}"
-            status = TaskStatus.FAILED
+            if ctx:
+                prompt_parts.append(ctx)
+
+            if last_error:
+                prompt_parts.append(
+                    f"## Previous Execution Failure (Attempt {attempts - 1})\n"
+                    f"The previous attempt failed with error:\n{last_error}\n\n"
+                    f"Please address this failure and produce a corrected, valid output."
+                )
+
+            prompt = "\n\n".join(prompt_parts)
+
+            try:
+                content = self.executor.run(task.sub_agent, prompt)
+                status = TaskStatus.SUCCESS
+                break
+            except Exception as err:
+                last_error = str(err)
+                content = f"Error executing task {task.id}: {err}"
+                status = TaskStatus.FAILED
 
         self.memory.log_event(f"result:{task.id}", content)
-        self.memory.log_event("dispatch", f"{task.id} -> {agent.id}")
+        self.memory.log_event("dispatch", f"{task.id} -> {agent.id} (attempts: {attempts})")
         return Result(
             task_id=task.id,
             sub_agent=task.sub_agent,
             content=content,
             status=status,
+            metadata={"attempts": str(attempts)},
         )
 
     # -- scheduling --------------------------------------------------------
-    def _schedule(self, plan: Plan) -> list[Result]:
+    def _schedule(self, plan: Plan, max_retries: int | None = None) -> list[Result]:
         """Execute tasks respecting dependencies; independent tasks run in parallel."""
         pending = {t.id: t for t in plan.tasks}
         done: set[str] = set()
@@ -146,7 +178,8 @@ class ChiefAI:
 
             with ThreadPoolExecutor(max_workers=min(len(ready), 8)) as ex:
                 futures = {
-                    ex.submit(self.dispatch, t, list(results.values())): t.id for t in ready
+                    ex.submit(self.dispatch, t, list(results.values()), max_retries): t.id
+                    for t in ready
                 }
                 for fut in futures:
                     res = fut.result()
@@ -237,15 +270,44 @@ class ChiefAI:
                     }
 
     # -- full pipeline -----------------------------------------------------
-    def execute(self, goal: str, parallel: bool = False) -> str:
+    def execute(
+        self, goal: str, parallel: bool = False, max_retries: int | None = None
+    ) -> str:
+        synthesis, _ = self.execute_with_summary(
+            goal, parallel=parallel, max_retries=max_retries
+        )
+        return synthesis
+
+    def execute_with_summary(
+        self, goal: str, parallel: bool = False, max_retries: int | None = None
+    ) -> tuple[str, ExecutionSummary]:
+        import time
+
+        start_time = time.perf_counter()
         plan = self.plan(goal)
         if parallel:
-            results = self._schedule(plan)
+            results = self._schedule(plan, max_retries=max_retries)
         else:
             results = []
             for t in plan.tasks:
-                results.append(self.dispatch(t, results))
-        return self.synthesize(plan, results)
+                results.append(self.dispatch(t, results, max_retries=max_retries))
+
+        duration = time.perf_counter() - start_time
+        succeeded = sum(1 for r in results if r.status == TaskStatus.SUCCESS)
+        failed = sum(1 for r in results if r.status == TaskStatus.FAILED)
+        attempts = sum(int(r.metadata.get("attempts", "1")) for r in results)
+
+        summary = ExecutionSummary(
+            goal=goal,
+            duration_seconds=duration,
+            total_tasks=len(results),
+            succeeded_tasks=succeeded,
+            failed_tasks=failed,
+            total_attempts=attempts,
+            results=results,
+        )
+        synthesis = self.synthesize(plan, results)
+        return synthesis, summary
 
 
 def _plan_to_dict(plan: Plan) -> dict:
