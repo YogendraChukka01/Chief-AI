@@ -82,4 +82,6 @@ class Result:
     sub_agent: str
     content: str
     status: TaskStatus = TaskStatus.SUCCESS
+    attempts: int = 1
+    error: str | None = None
     metadata: dict[str, str] = field(default_factory=dict)

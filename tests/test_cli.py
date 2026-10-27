@@ -54,3 +54,36 @@ def test_cli_memory_clear(tmp_path, capsys) -> None:
     mem_check = MemoryAI(path=mem_path)
     assert mem_check.recall("k1") is None
     assert mem_check.recall("k2") is None
+
+
+def test_cli_run_export_json(tmp_path) -> None:
+    export_path = str(tmp_path / "report.json")
+    ret = main(["run", "Build a landing page", "--export-json", export_path])
+    assert ret == 0
+
+    import json
+
+    with open(export_path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    assert data["goal"] == "Build a landing page"
+    assert "tasks" in data
+    assert "results" in data
+
+
+def test_cli_export_command(tmp_path, capsys) -> None:
+    # Test stdout output
+    ret = main(["export", "Build a landing page"])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "Build a landing page" in out
+
+    # Test file export
+    export_path = str(tmp_path / "export_cmd_report.json")
+    ret = main(["export", "Build a landing page", "--out", export_path])
+    assert ret == 0
+
+    import json
+
+    with open(export_path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    assert data["goal"] == "Build a landing page"
