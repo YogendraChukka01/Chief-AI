@@ -6,6 +6,48 @@ from chief_ai.cli import main
 from chief_ai.core.memory import MemoryAI
 
 
+def test_cli_memory_remember(tmp_path, capsys) -> None:
+    mem_path = str(tmp_path / "memory.json")
+
+    # Remember without category
+    ret = main(["memory", "--path", mem_path, "remember", "project_name", "Chief-AI"])
+    assert ret == 0
+    captured = capsys.readouterr().out
+    assert "Remembered 'project_name': Chief-AI" in captured
+
+    # Remember with category
+    ret = main(
+        ["memory", "--path", mem_path, "remember", "backend", "python", "--category", "tech_stack"]
+    )
+    assert ret == 0
+    captured = capsys.readouterr().out
+    assert "Remembered 'backend' [tech_stack]: python" in captured
+
+    # Verify directly in store
+    mem = MemoryAI(path=mem_path)
+    assert mem.recall("project_name") == "Chief-AI"
+    assert mem.recall("backend") == "python"
+    assert mem.recall_by_category("tech_stack") == {"backend": "python"}
+
+
+def test_cli_memory_recall(tmp_path, capsys) -> None:
+    mem_path = str(tmp_path / "memory.json")
+    mem = MemoryAI(path=mem_path)
+    mem.remember("k1", "v1", category="test_cat")
+
+    # Recall existing key
+    ret = main(["memory", "--path", mem_path, "recall", "k1"])
+    assert ret == 0
+    captured = capsys.readouterr().out
+    assert "k1 [test_cat]: v1" in captured
+
+    # Recall non-existent key
+    ret = main(["memory", "--path", mem_path, "recall", "missing_key"])
+    assert ret == 0
+    captured = capsys.readouterr().out
+    assert "Key not found in memory: 'missing_key'" in captured
+
+
 def test_cli_memory_list(tmp_path, capsys) -> None:
     mem_path = str(tmp_path / "memory.json")
     mem = MemoryAI(path=mem_path)
