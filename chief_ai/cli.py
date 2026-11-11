@@ -6,6 +6,8 @@ Usage:
     chief generate [--target .]
     chief list
     chief memory list
+    chief memory remember <key> <value> [--category <category>]
+    chief memory recall <key>
     chief memory forget <key>
     chief memory clear
 """
@@ -85,6 +87,26 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_memory_remember(args: argparse.Namespace) -> int:
+    mem = MemoryAI(path=args.path)
+    mem.remember(args.key, args.value, category=args.category)
+    cat_str = f" [{args.category}]" if args.category else ""
+    print(f"Remembered '{args.key}'{cat_str}: {args.value}")
+    return 0
+
+
+def _cmd_memory_recall(args: argparse.Namespace) -> int:
+    mem = MemoryAI(path=args.path)
+    val = mem.recall(args.key)
+    if val is not None:
+        cat = mem._state.categories.get(args.key)
+        cat_str = f" [{cat}]" if cat else ""
+        print(f"{args.key}{cat_str}: {val}")
+    else:
+        print(f"Key not found in memory: '{args.key}'")
+    return 0
+
+
 def _cmd_memory_list(args: argparse.Namespace) -> int:
     mem = MemoryAI(path=args.path)
     facts = mem._state.facts
@@ -148,11 +170,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.set_defaults(func=_cmd_serve)
 
     p_mem = sub.add_parser("memory", help="Inspect or manage Chief AI persistent memory")
-    p_mem.add_argument("--path", default=".chief_memory/memory.json", help="Path to memory store file")
+    p_mem.add_argument(
+        "--path", default=".chief_memory/memory.json", help="Path to memory store file"
+    )
     mem_sub = p_mem.add_subparsers(dest="memory_command", required=True)
 
     p_mem_list = mem_sub.add_parser("list", help="List facts and knowledge graph summary")
     p_mem_list.set_defaults(func=_cmd_memory_list)
+
+    p_mem_remember = mem_sub.add_parser("remember", help="Store a fact in memory")
+    p_mem_remember.add_argument("key", help="Fact key")
+    p_mem_remember.add_argument("value", help="Fact value")
+    p_mem_remember.add_argument("--category", help="Optional category tag")
+    p_mem_remember.set_defaults(func=_cmd_memory_remember)
+
+    p_mem_recall = mem_sub.add_parser("recall", help="Recall a fact from memory by key")
+    p_mem_recall.add_argument("key", help="Fact key to recall")
+    p_mem_recall.set_defaults(func=_cmd_memory_recall)
 
     p_mem_forget = mem_sub.add_parser("forget", help="Remove a fact from memory")
     p_mem_forget.add_argument("key", help="Fact key to remove")
